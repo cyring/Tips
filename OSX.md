@@ -35,13 +35,16 @@ X11Forwarding yes
 ```
 
 ## Xcode
-To build the Synergy GUI, download and install @ Apple Developers:  
+* To build the Synergy GUI, download and install @ Apple Developers:  
+
 1- Xcode 7.2  
 
-_for Yosemite_  
+* _for Yosemite_  
+
 2- the Command Line Tools OS X 10.10 for Xcode 7.2  
 
-_for El Capitan_  
+* _for El Capitan_  
+
 3- enter: ```xcode-select --install```  
 
 * Check the path of the active developer directory  
