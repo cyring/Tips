@@ -32,19 +32,27 @@ chmod +x .bash_profile
 ```
 sudo nano /private/etc/sshd_config
 X11Forwarding yes
-
 ```
 
 ## Xcode
+To build the Synergy GUI, download and install @ Apple Developers:  
+1- Xcode 7.2  
+
+_for Yosemite_  
+2- the Command Line Tools OS X 10.10 for Xcode 7.2  
+
+_for El Capitan_  
+3- enter: ```xcode-select --install```  
+
+* Check the path of the active developer directory  
 ```
-xcode-select --install
 xcode-select -p
 ```
 ```
 /Applications/Xcode.app/Contents/Developer
 ```
 
-## Mac Ports
+## [Mac Ports](http://www.macports.org/install.php)
 ```
 tar -zxvf MacPorts-2.3.4.tar.gz
 cd MacPorts-2.3.4/
@@ -52,7 +60,6 @@ cd MacPorts-2.3.4/
 make
 sudo make install
 sudo port -v selfupdate
-
 ```
 
 ## Synergy
@@ -62,17 +69,27 @@ sudo port install cmake
 sudo port install qt5
 
 git clone https://github.com/synergy/synergy.git
-cd synergy/
+```
+* [Fix](https://github.com/synergy/synergy/pull/5140) GUI build
+```
+cd synergy/src/gui/src
+nano CommandProcess.h
+```
+```
+#include <QObject>
+```
+```
+cd ..
+qmake
+cd ../..
 
+# Fix the toolchain for OSX
 nano ext/toolchain/commands1.py
 ```
 ```
-def configureCore(self, target="", extraArgs=""):
-#       elif sys.platform == "darwin":
-        if sys.platform == "darwin":
 def getMacSdkDir(self):
 #       return "/Developer/SDKs/" + sdkDirName + ".sdk"
-        return "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk"
+        return "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/" + sdkDirName + ".sdk"
 ```
 ```
 # ./hm.sh setup
@@ -84,14 +101,29 @@ def getMacSdkDir(self):
 3: Eclipse CDT4 - Unix Makefiles
 ```
 ```
-./hm.sh conf -g2
+./hm.sh conf -g2 --mac-sdk 10.11
 ./hm.sh build
 ```
 ```
+Entering dir: build
+=== BUILD AGGREGATE TARGET ZERO_CHECK OF PROJECT synergy WITH CONFIGURATION Release ===
+
+Check dependencies
+...
 Build all projects
 
 ** BUILD SUCCEEDED **
-
+...
+Make GUI command: make -w
+Entering dir: src/gui
+...
+Copying plugins dirtree: bin/Release/plugins
+Copying to: bin/Release/Synergy.app/Contents/MacOS/plugins
+Entering dir: bin/Release
+...
+bin/Release/Synergy.app
+```
+```
 sudo cp -v bin/Release/synergyc /opt/local/bin/
 ```
 
