@@ -95,7 +95,7 @@ Build all projects
 sudo cp -v bin/Release/synergyc /opt/local/bin/
 ```
 
-### Linux Server
+### Server (Linux)
 Follow these [instructions](https://wiki.archlinux.org/index.php/Synergy) to install the Synergy server on ArchLinux
 ```
 sudo nano /etc/synergy.conf
@@ -123,7 +123,40 @@ end
 synergys -f
 ```
 
-### OSX Client
+### Client (OSX)
 ```
 synergyc -f server-host-name
+```
+
+## Autostart
+### Server
+```
+systemctl enable synergys@<username>.socket     # replace with the unix user name
+```
+### Client
+```
+nano ~/Library/LaunchAgents/fr.cyring.synergy.plist
+```
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+		<string>fr.cyring.client.synergy</string>
+	<key>ProgramArguments</key>
+		<array>
+			<string>/opt/local/bin/synergyc</string>
+			<string>-f</string>
+			<string>-d</string>
+			<string>WARNING</string>
+			<string>RAM</string>
+		</array>
+	<key>KeepAlive</key>
+		<true/>
+</dict>
+</plist>
+```
+```
+launchctl load ~/Library/LaunchAgents/fr.cyring.synergy.plist
 ```
