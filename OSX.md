@@ -135,7 +135,7 @@ systemctl enable synergys@<username>.socket     # replace with the unix user nam
 ```
 ### Client
 ```
-nano ~/Library/LaunchAgents/fr.cyring.synergy.plist
+nano ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
 ```
 <?xml version="1.0" encoding="UTF-8"?>
@@ -143,14 +143,14 @@ nano ~/Library/LaunchAgents/fr.cyring.synergy.plist
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-		<string>fr.cyring.client.synergy</string>
+		<string>com.domain.synergy</string>
 	<key>ProgramArguments</key>
 		<array>
 			<string>/opt/local/bin/synergyc</string>
 			<string>-f</string>
 			<string>-d</string>
 			<string>WARNING</string>
-			<string>RAM</string>
+			<string>server-host-name</string>
 		</array>
 	<key>KeepAlive</key>
 		<true/>
@@ -158,5 +158,5 @@ nano ~/Library/LaunchAgents/fr.cyring.synergy.plist
 </plist>
 ```
 ```
-launchctl load ~/Library/LaunchAgents/fr.cyring.synergy.plist
+launchctl load ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
