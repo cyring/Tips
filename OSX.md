@@ -81,7 +81,7 @@ sudo port install qt5
 ```
 git clone https://github.com/synergy/synergy.git
 ```
-* [Fix](https://github.com/synergy/synergy/pull/5140) GUI build
+* [Fix](https://github.com/synergy/synergy/pull/5140) the GUI compilation.  
 ```
 cd synergy/src/gui/src
 nano CommandProcess.h
@@ -138,6 +138,7 @@ Entering dir: bin/Release
 ...
 bin/Release/Synergy.app
 ```
+* Copy the Client program into one of the binaries paths.  
 ```
 sudo cp -v bin/Release/synergyc /opt/local/bin/
 ```
