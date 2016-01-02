@@ -1,5 +1,6 @@
 # System
 ## Terminal
+* Improve the editor area.  
 ```
 nano /private/etc/nanorc
 ```
@@ -10,12 +11,13 @@ set morespace
 set nohelp
 set nonewlines
 ```
-
+* Add the path of the Mac Ports.  
 ```
 nano .bash_profile
 ```
 ```
 PATH=/opt/local/bin:/opt/local/libexec/qt5/bin:$PATH
+
 PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033$
 alias ll='ls -hlG'
 alias la='ls -hAlG'
@@ -23,14 +25,16 @@ alias l='ls -CFG'
 alias grep='grep --color=auto'
 alias updatedb='sudo /usr/libexec/locate.updatedb'
 ```
-
 ```
 chmod +x .bash_profile
 ```
 
 ## XQuartz
+* Enable X11 forwarding.  
 ```
 sudo nano /private/etc/sshd_config
+```
+```
 X11Forwarding yes
 ```
 
@@ -47,7 +51,7 @@ X11Forwarding yes
 
 3- enter: ```xcode-select --install```  
 
-* Check the path of the active developer directory  
+* Take note of the path of the active developer directory.  
 ```
 xcode-select -p
 ```
@@ -55,7 +59,8 @@ xcode-select -p
 /Applications/Xcode.app/Contents/Developer
 ```
 
-## [Mac Ports](http://www.macports.org/install.php)
+## Mac Ports
+* Build [Mac Ports](http://www.macports.org/install.php) from its source code.  
 ```
 tar -zxvf MacPorts-2.3.4.tar.gz
 cd MacPorts-2.3.4/
@@ -67,10 +72,13 @@ sudo port -v selfupdate
 
 ## Synergy
 ### Build
+* Install the required libraries.  
 ```
 sudo port install cmake
 sudo port install qt5
-
+```
+* Get the Synergy source code.  
+```
 git clone https://github.com/synergy/synergy.git
 ```
 * [Fix](https://github.com/synergy/synergy/pull/5140) GUI build
@@ -85,8 +93,9 @@ nano CommandProcess.h
 cd ..
 qmake
 cd ../..
-
-# Fix the toolchain for OSX
+```
+* Fix the toolchain to handle the OS X version.  
+```
 nano ext/toolchain/commands1.py
 ```
 ```
@@ -98,15 +107,18 @@ def getMacSdkDir(self):
 # ./hm.sh setup
 ./hm.sh genlist
 ```
+* Check for the supported compilers.  
 ```
 1: Unix Makefiles
 2: Xcode
 3: Eclipse CDT4 - Unix Makefiles
 ```
+*  Compile the sources, specifying the OS X version.  
 ```
 ./hm.sh conf -g2 --mac-sdk 10.11
 ./hm.sh build
 ```
+* Check for a successful build.  
 ```
 Entering dir: build
 === BUILD AGGREGATE TARGET ZERO_CHECK OF PROJECT synergy WITH CONFIGURATION Release ===
@@ -131,7 +143,11 @@ sudo cp -v bin/Release/synergyc /opt/local/bin/
 ```
 
 ### Server (Linux)
-Follow these [instructions](https://wiki.archlinux.org/index.php/Synergy) to install the Synergy server on ArchLinux
+* Follow these [instructions](https://wiki.archlinux.org/index.php/Synergy) to install the Synergy server from the Arch Linux Repository.  
+```
+yaourt -S synergy-git
+```
+* Configure the computers disposal.  
 ```
 sudo nano /etc/synergy.conf
 ```
@@ -154,17 +170,20 @@ section: aliases
                 client-host-name.some-domain
 end
 ```
+* Start the server.  
 ```
 synergys -f
 ```
 
 ### Client (OSX)
+* Start the client.
 ```
 synergyc -f server-host-name
 ```
 
 ## Autostart
 ### Client
+* Configure a plist file to auto start the Synergy client whenever the user start a session.  
 ```
 nano ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
@@ -188,6 +207,7 @@ nano ~/Library/LaunchAgents/com.domain.synergy.plist
 </dict>
 </plist>
 ```
+* Make the agent active.  
 ```
 launchctl load ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
@@ -196,8 +216,7 @@ launchctl load ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
 systemctl enable synergys@<username>.socket     # replace with the unix user name
 ```
-_Failed:_  
-* The Synergy server terminates with a dumpcore because the <username> must be allowed to make connections to the X server.  
+* _Failed_ : The Synergy server is terminated with a core dump because the ```<username>``` must be allowed to make connections to the X server.  
 
 ## Solution #2 (XDM)
 ```
@@ -208,5 +227,4 @@ xhost +local:<username>
 sudo -u <username> synergys --daemon
 
 ```
-_Failed:_  
-* Partly successful until the mouse leaves the master screen to enter the slave screen.  Might be due by the fact that XDM grabs the X keyboard.
+* _Failed_ : Partly successful until the mouse leaves the master screen to enter the slave screen.  Might be due by the fact that XDM grabs the X keyboard.  
