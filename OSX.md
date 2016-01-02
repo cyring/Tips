@@ -164,10 +164,6 @@ synergyc -f server-host-name
 ```
 
 ## Autostart
-### Server
-```
-systemctl enable synergys@<username>.socket     # replace with the unix user name
-```
 ### Client
 ```
 nano ~/Library/LaunchAgents/com.domain.synergy.plist
@@ -195,3 +191,22 @@ nano ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
 launchctl load ~/Library/LaunchAgents/com.domain.synergy.plist
 ```
+### Server
+## Solution #1 (SystemD)
+```
+systemctl enable synergys@<username>.socket     # replace with the unix user name
+```
+_Failed:_  
+* The Synergy server terminates with a dumpcore because the <username> must be allowed to make connections to the X server.  
+
+## Solution #2 (XDM)
+```
+sudo nano Xsetup
+```
+```
+xhost +local:<username>
+sudo -u <username> synergys --daemon
+
+```
+_Failed:_  
+* Partly successful until the mouse leaves the master screen to enter the slave screen.  Might be due by the fact that XDM grabs the X keyboard.
