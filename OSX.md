@@ -244,10 +244,10 @@ sudo nano Xstartup
 pidof synergys
 declare -i STATE=$?
 if (( $STATE == 1 )); then
-    xhost +local:${USER}
+    xhost +local:${USER} > /dev/null 2>&1
     declare -i RC=$?
         if (( $RC == 0 )); then
-           sudo -u synergys -d WARNING --daemon
+           sudo -u ${USER} synergys -d WARNING --daemon
         fi
 fi
 ```
