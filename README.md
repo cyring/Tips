@@ -1,2 +1,5 @@
 _CyrIng's Tips_
-# [OS X](OSX.md)
+# Systems
+[OS X](OSX.md)
+# Applications
+[Synergy](Synergy.md)
