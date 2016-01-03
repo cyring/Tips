@@ -203,6 +203,7 @@ fi
 sudo nano Xreset
 ```
 ```sh
+#!/bin/sh
 killall synergys > /dev/null 2>&1
 ```
 * _Successful_ : this solution allows an early startup of the Synergy server, right before the user starts a X session, and die when the X session stops. However, it won't let the Synergy server run during the XDM chooser.  
