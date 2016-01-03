@@ -36,6 +36,13 @@ cd ..
 qmake
 cd ../..
 ```
+* Take note of the path of the active developer directory.  
+```
+xcode-select -p
+```
+```
+/Applications/Xcode.app/Contents/Developer
+```
 * Fix the toolchain to handle the OS X version.  
 ```sh
 nano ext/toolchain/commands1.py
