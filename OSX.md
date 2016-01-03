@@ -50,25 +50,15 @@ ssh -Y username@hostname
 * Remark : _verify_ and accept the proposed key.  
 
 ## Xcode
-* To build the Synergy GUI, download and install @ Apple Developers:  
-
 1- Xcode 7.2  
+* Search for Xcode : ```App store > Store > Search```  
+* Or download and install @ Apple Developers.  
 
-* _for Yosemite_  
+2- _Yosemite_  
+* Get the Command Line Tools OS X 10.10 for Xcode 7.2  
 
-2- the Command Line Tools OS X 10.10 for Xcode 7.2  
-
-* _for El Capitan_  
-
-3- enter: ```xcode-select --install```  
-
-* Take note of the path of the active developer directory.  
-```
-xcode-select -p
-```
-```
-/Applications/Xcode.app/Contents/Developer
-```
+3- _El Capitan_  
+* Enter: ```xcode-select --install```  
 
 ## Mac Ports
 * Build [Mac Ports](http://www.macports.org/install.php) from its source code.  
