@@ -108,6 +108,7 @@ sudo nano /etc/synergy.conf
 ```
 section: screens
         client-host-name:
+        	altgr = alt
         server-host-name:
 end
 
