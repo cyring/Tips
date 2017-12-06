@@ -1,37 +1,44 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 
-typedef union
-{
-	unsigned long long key[2];
-	unsigned char code[16];
+#define TIMESPEC(nsec)							\
+({									\
+	struct timespec tsec = {					\
+		.tv_sec  = (time_t) 0,					\
+		.tv_nsec = nsec						\
+	};								\
+	tsec;								\
+})
+
+typedef union {
+	unsigned long long key;
+	unsigned char code[8];
 } SCANKEY;
 
-int GetKey(SCANKEY *scan)
+int GetKey(SCANKEY *scan, struct timespec *tsec)
 {
 	struct pollfd fds = {.fd = STDIN_FILENO, .events = POLLIN};
-	int jk = 0, rp = 0, rz = 0;
+	int rp = 0, rz = 0;
 
-	if ((rp = poll(&fds, 1, 0)) > 0)
-	{
-		size_t lc = 0, tc = 0;
-//		for(jk=0; jk < 2; jk++)
-		{
-			lc = fread(&scan->key[jk], 1, 16, stdin);
-			tc = lc;
+	if ((rp = ppoll(&fds, 1, tsec, NULL)) > 0)
+		if (fds.revents == POLLIN) {
+			size_t lc = fread(&scan->key, 1, 8, stdin);
+			for (rz = lc; rz < 8; rz++)
+				scan->code[rz] = 0;
 		}
-		for (rz = tc; rz < 16; rz++)
-			scan->code[rz] = 0;
-	}
 	return(rp);
 }
 
 int main(int argc, char *argv[])
 {
+	struct timespec wait = TIMESPEC(250000000LLU);
 	struct termios oldt, newt;
+	SCANKEY scan = {.key = 0};
+	int xmouse = 0, rp = 0;
 
 	tcgetattr ( STDIN_FILENO, &oldt );
 	newt = oldt;
@@ -40,33 +47,19 @@ int main(int argc, char *argv[])
 	newt.c_cc[VMIN] = 0;
 	tcsetattr ( STDIN_FILENO, TCSANOW, &newt );
 
-	int xmouse = 0;
 	if ((argc == 2) && (argv[1][0] == '-') && (argv[1][1] == 'x'))
 		xmouse = 1;
 
 	if (xmouse)
 		printf("ANSI:\033[?1000h\n");
 
-	int rp = 0;
-	SCANKEY scan = {.key = 0};
-	while(scan.key[0] != 0x1b)
+	while(scan.key != 0x1b)
 	{
-		usleep(250000);
-
-	    if ((rp = GetKey(&scan)) > 0)
-		printf(	"Poll(\033[1;35;49m%d\033[1;39;49m)"	\
-			"\033[1;31;49m[\033[1;39;49m%x:"	\
-			"%d,%d,%d,%d,%d,%d,%d,%d\033[1;31;49m]\033[1;39;49m\n",
-			rp,
-			scan.key[0],
-			scan.code[ 8],
-			scan.code[ 9],
-			scan.code[10],
-			scan.code[11],
-			scan.code[12],
-			scan.code[13],
-			scan.code[14],
-			scan.code[15]);
+		if ((rp = GetKey(&scan, &wait)) > 0)
+			printf(	"Poll(\033[1;35;49m%d\033[1;39;49m)"	\
+				"\033[1;31;49m[\033[1;39;49m%llx"	\
+				"\033[1;31;49m]\033[1;39;49m\n",
+				rp, scan.key);
 	}
 	tcsetattr ( STDIN_FILENO, TCSANOW, &oldt );
 
