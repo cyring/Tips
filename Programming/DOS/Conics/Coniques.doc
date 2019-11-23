@@ -1,0 +1,222 @@
+    Etude math‚matique
+------------------------------------------------------------------------------
+
+(a)
+    L'‚quation g‚n‚rale des coniques dans R  est la suivante:
+                        a(x+xo)ý + b(y+yo)ý + c(z+zo)ý = k
+    o— a,b,c sont les paramŠtres qui d‚terminent la nature de la conique,
+    k est une constante et xo,yo,zo sont les coordonn‚es spatiales de
+    l'origine.
+
+    Par le changement de variable X=x+xo, Y=y+yo et Z=z+zo, on obtient
+    l'‚quation simplifi‚e:
+                              a.Xý + b.Yý + c.Zý = k
+
+    En consid‚rant le signe ou la nullit‚ des paramŠtres a,b et c, on trouve
+    une combinaison de 3  types de coniques.
+    Toutefois, seulement six parmi elles sont possibles:
+    1 - l'ellipso‹de
+    2 - l'hyperbolo‹de … une nappe
+    3 - l'hyperbolo‹de … deux nappes
+    4 - le cylindre elliptique
+    5 - le cylindre hyperbolique
+    6 - deux plans parallŠles
+
+(b)
+    L'‚tude de l'‚quation nous amŠne … exprimer une inconnue en fonction
+    des deux autres:
+                        Z = û { (k - a.Xý - b.Yý) / c }     avec  c Ø 0
+    En faisant varier X et Y sur leur intervalle respectif ]-ì,+ì[ ,
+    il s'impose que { (k-aXý-bYý) / c } ò 0. Il en r‚sulte la perte de la
+    moiti‚ des points qui composent la conique. Pour palier … ce problŠme,
+    on d‚termine pour chaque point son sym‚trique sur l'axe Z. -> (X,Y,-Z).
+
+(c)
+    On applique … tous les points M de la conique une homot‚thie de facteur h
+    en fonction d'un centre ê = (xs,ys,zs) et l'on obtient M' = (x',y',z'):
+                     Ú  x'= h.X + (1-h).xs ¿       Ú x'= h(x+xo) + (1-h).xs ¿
+    êM' = h êM  <=>  ³  y'= h.Y + (1-h).ys ³  <=>  ³ y'= h(y+yo) + (1-h).ys ³
+                     À  z'= h.Z + (1-h).zs Ù       À z'= h(z+zo) + (1-h).zs Ù
+    remarque: h = 1 est une homoth‚tie identit‚ (La conique reste … sa place).
+
+(d)
+    Le calcule des rotations et des translations des coniques est bas‚ sur
+    le modŠle suivant:
+                                xr = A.x + D.y + G.z + xd
+                                yr = B.x + E.y + H.z + yd
+                                zr = C.x + F.y + I.z + zd
+    o— xd,yd,zd caract‚risent les d‚placements dans les directions x,y,z;
+    xr,yr,zr sont les coordonn‚es spatiales aprŠs rotation et translation.
+    Les paramŠtres A,B,C...I sont d‚termin‚s par les formules:
+    A = cos(za) * cos(ya)
+    B = sin(za) * cos(ya)
+    C =-sin(ya)
+    D =-sin(za) * cos(xa) + cos(za) * sin(ya) * sin(xa)
+    E = cos(za) * cos(xa) + sin(za) * sin(ya) * sin(xa)
+    F = cos(ya) * sin(xa)
+    G = sin(za) * sin(xa) + cos(za) * sin(ya) * cos(xa)
+    H =-cos(za) * sin(xa) + sin(za) * sin(ya) * cos(xa)
+    I = cos(ya) * cos(xa)
+
+(e)
+    Etant donn‚ que nous sommes amen‚s … porter sur un ‚cran … deux
+    dimensions des objets … trois dimensions, nous faisons appel … la
+    m‚thode de projection centrale:
+                          xp = xr / q
+                          yp = yr / q     avec  q = 1 - (zr / p)
+    o— p caract‚rise l'‚loignement (coordonn‚e en z) du point de fuite;
+    et xp,yp les coordonn‚es r‚sultantes de la transformation appliqu‚e
+    dans le plan de l'‚cran.
+
+    Etude algorithmique
+------------------------------------------------------------------------------
+
+
+(a)
+
+    Deux m‚thodes sont possibles pour le trac‚ de coniques:
+
+    - le calcul et le trac‚ des points simultan‚ment
+
+    - [1] le calcul de tous les points. [2] le trac‚ de la conique.
+
+    En th‚orie, le temps de traitement pour les deux m‚thodes devrait ˆtre
+
+    identique car elles se composent des mˆmes op‚rations; cependant, si on
+
+    envisage des rotations, des translations et des homoth‚ties, le premier
+
+    algorithme ajoute le calcul syst‚matique de z fonction de x et y.
+
+    Par contre, si le calcul de l'ensemble des points est m‚moris‚
+
+    (le squelette de la conique) on supprime le temps de recalcul de z.
+
+
+
+(b)
+
+    La deuxiŠme solution n‚cessite un processus de m‚morisation qui peut ˆtre
+
+    une allocation statique ou dynamique.
+
+    Une m‚morisation statique est simple … programmer (cf tableau de donn‚es),
+
+    toutefois, comme tous les points g‚n‚r‚s par l'‚quation de la conique sont
+
+    rang‚s, il en r‚sulte que certaines cellules m‚moire ne fassent pas
+
+    l'objet d'une affectation, d'o— perte (voir ‚tude math‚matique (b) ).
+
+    De son c“t‚, une allocation dynamique ajuste la quantit‚ de m‚moire
+
+    utilis‚e au nombre de points g‚n‚r‚s. Cependant la programmation s'en
+
+    r‚vŠle plus compliqu‚e (cf liste chaŒn‚e, gestion du tas, d‚bordement).
+
+    L'avantage d'un algorithme de m‚morisation dynamique est qu'il permet de
+
+    travailler sur plusieurs coniques, dans la limite de la taille du tas.
+
+    AprŠs de nombreuses exp‚rimentations, notre choix s'est arrˆt‚ sur cette
+
+    derniŠre solution.
+
+    Programmation
+------------------------------------------------------------------------------
+
+    Chaque conique possŠde des attributs qui la caract‚risent:
+    les coefficients a,b,c de l'‚quation, la constante k, l'origine (xo,yo,zo)
+    le centre (xs,ys,zs) et le facteur h d'homot‚thie, l'intervalle 'pas'
+    entre les points.
+    Les points d'une conique sont chaŒn‚s en fonction du type d'objet suivant:
+
+                     type    point  = chaine;
+                             chaine = record
+                                      info : byte;
+                                      xreal,
+                                      yreal,
+                                      zreal: real;
+                                      xlien,
+                                      ylien: point;
+                             end;
+
+    xreal,yreal et zreal sont les coordonn‚es du point.
+    Les points de la premiŠre colonne ont une info=_move et les autres ont une
+    info=_line, … l'exception du dernier point de la liste avec une info=_stop
+    Une info=_move ‚vite les effets de trac‚ de lignes diagonales.
+
+    sch‚ma du chaŒnage:
+                             NIL   NIL   NIL   NIL
+                              ^     ^     ^     ^
+                              o-->--o-->--o-->--o            ylien
+                              ^     ^     ^     ^              ^
+                              o-->--o-->--o-->--o              o--> xlien
+                              ^     ^     ^     ^                 
+                              o-->--o-->--o-->--o    NIL
+                              ^     ^     ^     ^     ^
+                              o-->--o-->--o-->--o-->--o--> NIL
+
+    Les points sont chaŒn‚s entre eux lin‚airement par le pointeur 'xlien'.
+    De plus, ils sont chacun li‚s par le pointeur 'ylien' avec le point qui
+    se trouve sur la mˆme colonne et sur la ligne sup‚rieure.
+    Une telle structure apporte tout son int‚rˆt dans les algorithmes de
+    trac‚ en patch vide ou plein (voir listing proc‚dures trace1 et trace2).
+
+    La proc‚dure validation permet de d‚tecter le param‚trage de coniques sans
+    solution. D'apr‚s l'‚tude math‚matique (a), il existe 27 types de coniques
+
+      a  b  c   type        a  b  c   type        a  b  c   type
+      -  -  -  --> 0        0  -  -  --> 0        +  -  -  --> 3
+      -  -  0  --> 0        0  -  0  --> 0        +  -  0  --> 5
+      -  -  +  --> 3        0  -  +  --> 5        +  -  +  --> 2
+      -  0  -  --> 0        0  0  -  --> 0        +  0  -  --> 5
+      -  0  0  --> 0        0  0  0  --> 0        +  0  0  --> 6
+      -  0  +  --> 5        0  0  +  --> 6        +  0  +  --> 4
+      -  +  -  --> 3        0  +  -  --> 5        +  +  -  --> 2
+      -  +  0  --> 5        0  +  0  --> 6        +  +  0  --> 4
+      -  +  +  --> 2        0  +  +  --> 4        +  +  +  --> 1
+
+    remarque: un type 0 signifie que la conique est insoluble.
+
+    Utilisation
+------------------------------------------------------------------------------
+
+
+(a)
+
+    L'‚cran est partag‚ en deux parties de surface in‚gale. Celle de droite
+
+    est r‚serv‚e au trac‚ des coniques, celle de gauche contient le tableau
+
+    de bord. Dans ce dernier, les touches … actionner ont une couleur rouge,
+
+    les titres de section sont en bleu et les informations variables en blanc.
+
+    Les variables du menu sont identiques … celle du modŠle math‚matique,
+
+    cependant, le centre d'homot‚thie a pour coordonn‚es (u,v,w).
+
+    La zone de trac‚ comprend les axes de direction x,y,z et un carr‚ blanc
+
+    qui symbolise le centre d'homot‚thie.
+
+
+(b)
+
+    Il existe quatre logos d'information qui apparaissent en bas du menu:
+
+    - le sens interdit: erreur de saisie, coefficient c=0
+
+    - le point d'interrogation: param‚trage d'une conique sans solution
+
+    - le m majuscule: plus assez de m‚moire
+
+    - l'horloge: traitement en cours
+
+
+    L'option Information affiche un ‚tat statistique sur les coniques avec
+
+    leur nom, leur nombre de segments, leur allocation m‚moire en octet 'B'
+
+    et leur pourcentage d'occupation.

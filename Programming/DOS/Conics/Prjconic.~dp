@@ -1,0 +1,14 @@
+program Prjconic;
+
+uses
+  Forms,
+  Winconic in 'WINCONIC.PAS' {Form1};
+
+{$R *.RES}
+
+begin
+  Application.Title := 'Coniques';
+  Application.CreateForm(TForm1, Form1);
+  canvas := Application.MainForm.Canvas;
+  Application.Run;
+end.
