@@ -1,0 +1,7 @@
+LIBRARY    CALLMGR
+DESCRIPTION "Call Manager"
+EXPORTS
+	cmInitializeCallManager		@1
+	cmTerminateCallManager		@2
+	cmMakeCall					@3
+	cmReleaseCall				@4
