@@ -15,6 +15,94 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#define _BITVAL_GPR(_lock,_base, _offset)				\
+({									\
+	Bit64 _tmp __attribute__ ((aligned (8))) = _base;		\
+	volatile unsigned char _ret;					\
+									\
+	__asm__ volatile						\
+	(								\
+	_lock	"btcq	%%rdx, %[tmp]"		"\n\t"			\
+		"setc	%[ret]" 					\
+		: [ret] "+m" (_ret)					\
+		: [tmp] "m" (_tmp),					\
+		  "d" (_offset) 					\
+		: "cc", "memory"					\
+	);								\
+	_ret;								\
+})
+
+#define _BITVAL_IMM(_lock, _base, _imm8)				\
+({									\
+	Bit64 _tmp __attribute__ ((aligned (8))) = _base;		\
+	volatile unsigned char _ret;					\
+									\
+	__asm__ volatile						\
+	(								\
+	_lock	"btcq	%[imm8], %[tmp]"	"\n\t"			\
+		"setc	%[ret]" 					\
+		: [ret] "+m" (_ret)					\
+		: [tmp] "m"  (_tmp),					\
+		  [imm8] "i" (_imm8)					\
+		: "cc", "memory"					\
+	);								\
+	_ret;								\
+})
+
+#define _BIT_TEST_GPR(_base, _offset)					\
+({									\
+	volatile unsigned char _ret;					\
+									\
+	__asm__ volatile						\
+	(								\
+		"btq	%%rdx, %[base]" 	"\n\t"			\
+		"setc	%[ret]" 					\
+		: [ret] "+m" (_ret)					\
+		: [base] "m" (_base),					\
+		  "d" ( _offset )					\
+		: "cc", "memory"					\
+	);								\
+	_ret;								\
+})
+
+#define _BIT_TEST_IMM(_base, _imm8)					\
+({									\
+	volatile unsigned char _ret;					\
+									\
+	__asm__ volatile						\
+	(								\
+		"btq	%[imm8], %[base]"	"\n\t"			\
+		"setc	%[ret]" 					\
+		: [ret] "+m" (_ret)					\
+		: [base] "m" (_base),					\
+		  [imm8] "i" (_imm8)					\
+		: "cc", "memory"					\
+	);								\
+	_ret;								\
+})
+
+#define BITVAL_2xPARAM(_base, _offset)					\
+(									\
+	__builtin_constant_p(_offset) ? 				\
+		_BIT_TEST_IMM(_base, _offset)				\
+	:	_BIT_TEST_GPR(_base, _offset)				\
+)
+
+#define BITVAL_3xPARAM(_lock, _base, _offset)				\
+(									\
+	__builtin_constant_p(_offset) ? 				\
+		_BITVAL_IMM(_lock, _base, _offset)			\
+	:	_BITVAL_GPR(_lock, _base, _offset)			\
+)
+
+#define BITVAL_DISPATCH(_1,_2,_3,BITVAL_CURSOR, ...)			\
+	BITVAL_CURSOR
+
+#define BITVAL(...)							\
+	BITVAL_DISPATCH( __VA_ARGS__ ,	BITVAL_3xPARAM ,		\
+					BITVAL_2xPARAM ,		\
+					NULL)( __VA_ARGS__ )
+
 #define PCI_CONFIG_ADDRESS(bus, dev, fn, reg) \
 	(0x80000000 | (bus << 16) | (dev << 11) | (fn << 8) | (reg & ~3))
 
@@ -103,17 +191,119 @@ void FCH_Read(union DATA *data, unsigned int addr)
 	AMD_FCH_READ16(data->word, addr);
 }
 
+void UMC_Read(union DATA *data, unsigned int _addr)
+{
+	#define SMU_AMD_UMC_BASE_CH0_F17H	0x00050000
+	#define SMU_AMD_UMC_BASE_CH1_F17H	0x00150000
+	#define MAX_CHANNELS	2
+
+	union DATA reg0x104, ChipReg, MaskReg;
+
+	unsigned int UMC_BAR[MAX_CHANNELS] = {
+		SMU_AMD_UMC_BASE_CH0_F17H,
+		SMU_AMD_UMC_BASE_CH1_F17H
+	}, CHIP_BAR[2][2], ChannelCount = 0, cha, chip, sec;
+
+    for (cha = 0; cha < MAX_CHANNELS; cha++)
+    {
+	reg0x104.dword = 0;
+
+	SMU_Read(&reg0x104, UMC_BAR[cha] + 0x104);
+
+	if (BITVAL(reg0x104.dword, 31)) {
+		ChannelCount++;
+	}
+    }
+	printf("\nWelcome to the Data Fabric: UMC has %u x Channel(s)\n\n",
+		ChannelCount);
+
+    for (cha = 0; cha < ChannelCount; cha++)
+    {
+	unsigned long long MemSize = 0;
+
+	CHIP_BAR[0][0] = UMC_BAR[cha] + 0x0;
+
+	CHIP_BAR[0][1] = UMC_BAR[cha] + 0x20;
+
+	CHIP_BAR[1][0] = UMC_BAR[cha] + 0x10;
+
+	CHIP_BAR[1][1] = UMC_BAR[cha] + 0x28;
+
+	printf( "CHA[%u]\tCHIP_BAR[0][0]=0x%08x CHIP_BAR[0][1]=0x%08x\n" \
+		"\t\tCHIP_BAR[1][0]=0x%08x CHIP_BAR[1][1]=0x%08x\n", cha,
+		CHIP_BAR[0][0], CHIP_BAR[0][1],
+		CHIP_BAR[1][0], CHIP_BAR[1][1] );
+
+	for (chip = 0; chip < 4; chip++)
+	{
+	    for (sec = 0; sec < 2; sec++)
+	    {
+		unsigned int addr, state;
+
+		addr = CHIP_BAR[sec][0] + 4 * chip;
+
+		SMU_Read(&ChipReg, addr);
+
+		state = BITVAL(ChipReg.dword, 0);
+
+		printf( "CHA[%u] CHIP[%u:%u] @ 0x%08x[0x%08x] %sable\n",
+			cha, chip, sec, addr, ChipReg.dword,
+			state ? "En":"Dis" );
+
+		addr = CHIP_BAR[sec][1] + 4 * (chip >> 1);
+
+		SMU_Read(&MaskReg, addr);
+
+		if (state)
+		{
+			unsigned int chipSize;
+
+			__asm__ volatile
+			(
+				"xorl	%%edx, %%edx"		"\n\t"
+				"bsrl	%[base], %%ecx" 	"\n\t"
+				"jz	1f"			"\n\t"
+				"incl	%%edx"			"\n\t"
+				"shll	%%ecx, %%edx"	 	"\n\t"
+				"negl	%%edx"			"\n\t"
+				"notl	%%edx"			"\n\t"
+				"andl	$0xfffffffe, %%edx"	"\n\t"
+				"shrl	$2, %%edx"		"\n\t"
+				"incl	%%edx"			"\n\t"
+			"1:"					"\n\t"
+				"movl	%%edx, %[dest]"
+				: [dest] "=m" (chipSize)
+				: [base] "m"  (MaskReg.dword)
+				: "cc", "memory", "%ecx", "%edx"
+			);
+
+			MemSize += chipSize;
+
+		printf( "CHA[%u] MASK[%u:%u] @ 0x%08x[0x%08x] ChipSize[%u]\n",
+			cha, chip, sec, addr, MaskReg.dword, chipSize );
+		} else {
+		printf( "CHA[%u] MASK[%u:%u] @ 0x%08x[0x%08x]\n",
+			cha, chip, sec, addr, MaskReg.dword );
+		}
+	    }
+	}
+	printf( "Memory Size[%llu KB] [%llu MB]\n", MemSize, (MemSize >> 10));
+    }
+}
+
 enum IC {
 	SMU,
 	FCH,
+	UMC,
 	LAST
 };
 
-char *component[LAST] = { [SMU] = "smu", [FCH] = "fch" };
+char *component[LAST] = { [SMU] = "smu", [FCH] = "fch", [UMC] = "umc" };
 
 void (*IC_Read[LAST])(union DATA*, unsigned int) = {
 	[SMU] = SMU_Read,
-	[FCH] = FCH_Read
+	[FCH] = FCH_Read,
+	[UMC] = UMC_Read
 };
 
 int main(int argc, char *argv[])
@@ -156,9 +346,9 @@ USAGE:
 			union DATA data = { .dword = 0 };
 
 			IC_Read[ic](&data, addr);
-
-			printf("0x%x (%u)\n", data.dword, data.dword);
-
+			if (ic != UMC) {
+				printf("0x%x (%u)\n", data.dword, data.dword);
+			}
 			iopl(0);
 			rc = 0;
 		} else {
