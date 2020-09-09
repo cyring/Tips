@@ -193,51 +193,81 @@ void FCH_Read(union DATA *data, unsigned int addr)
 
 void UMC_Read(union DATA *data, unsigned int _addr)
 {
-	#define SMU_AMD_UMC_BASE_CH0_F17H	0x00050000
-	#define SMU_AMD_UMC_BASE_CH1_F17H	0x00150000
-	#define MAX_CHANNELS	2
+	#define SMU_AMD_UMC_BASE_CHA_F17H(_cha)	(0x00050000 + (_cha << 20))
+	#define MAX_CHANNELS	8
 
-	union DATA reg0x104, ChipReg, MaskReg;
+	unsigned int UMC_BAR[MAX_CHANNELS] = { 0,0,0,0,0,0,0,0 };
 
-	unsigned int UMC_BAR[MAX_CHANNELS] = {
-		SMU_AMD_UMC_BASE_CH0_F17H,
-		SMU_AMD_UMC_BASE_CH1_F17H
-	}, CHIP_BAR[2][2], ChannelCount = 0, cha, chip, sec;
+	unsigned int EAX, EBX, ECX, EDX;
+	__asm__ volatile
+	(
+		"movq	$0x80000008, %%rax	\n\t"
+		"xorq	%%rbx, %%rbx		\n\t"
+		"xorq	%%rcx, %%rcx		\n\t"
+		"xorq	%%rdx, %%rdx		\n\t"
+		"cpuid				\n\t"
+		"mov	%%eax, %0		\n\t"
+		"mov	%%ebx, %1		\n\t"
+		"mov	%%ecx, %2		\n\t"
+		"mov	%%edx, %3"
+		: "=r" (EAX),
+		  "=r" (EBX),
+		  "=r" (ECX),
+		  "=r" (EDX)
+		:
+		: "%rax", "%rbx", "%rcx", "%rdx"
+	);
 
-    for (cha = 0; cha < MAX_CHANNELS; cha++)
+	const unsigned int NC = ECX & 0xff;
+
+	const unsigned short factor = (NC == 0x3f) || (NC == 0x2f),
+		MaxChannels = (factor == 1) ? MAX_CHANNELS / 2 : MAX_CHANNELS;
+
+	unsigned short ChannelCount = 0, cha, chip, sec;
+
+    for (cha = 0; cha < MaxChannels; cha++)
     {
-	reg0x104.dword = 0;
+	union DATA SdpCtrl = {.dword = 0};
+	const unsigned short ccd = cha << factor;
 
-	SMU_Read(&reg0x104, UMC_BAR[cha] + 0x104);
+	SMU_Read(&SdpCtrl, SMU_AMD_UMC_BASE_CHA_F17H(ccd) + 0x104);
 
-	if (BITVAL(reg0x104.dword, 31)) {
-		ChannelCount++;
+	if ((SdpCtrl.dword != 0xffffffff) && (BITVAL(SdpCtrl.dword, 31)))
+	{
+		UMC_BAR[ChannelCount++] = SMU_AMD_UMC_BASE_CHA_F17H(ccd);
 	}
     }
-	printf("\nWelcome to the Data Fabric: UMC has %u x Channel(s)\n\n",
-		ChannelCount);
+	printf("\nWelcome to the Data Fabric: UMC has %u/%u Channels\n\n",
+		ChannelCount, MaxChannels);
 
     for (cha = 0; cha < ChannelCount; cha++)
     {
-	unsigned long long MemSize = 0;
+	unsigned long long DIMM_Size = 0;
 
-	CHIP_BAR[0][0] = UMC_BAR[cha] + 0x0;
-
-	CHIP_BAR[0][1] = UMC_BAR[cha] + 0x20;
-
-	CHIP_BAR[1][0] = UMC_BAR[cha] + 0x10;
-
-	CHIP_BAR[1][1] = UMC_BAR[cha] + 0x28;
-
-	printf( "CHA[%u]\tCHIP_BAR[0][0]=0x%08x CHIP_BAR[0][1]=0x%08x\n" \
-		"\t\tCHIP_BAR[1][0]=0x%08x CHIP_BAR[1][1]=0x%08x\n", cha,
-		CHIP_BAR[0][0], CHIP_BAR[0][1],
-		CHIP_BAR[1][0], CHIP_BAR[1][1] );
+	const unsigned int CHIP_BAR[4][2] = {
+	[0] =	{
+		[0] = UMC_BAR[cha] + 0x0,
+		[1] = UMC_BAR[cha] + 0x20
+		},
+	[1] =	{
+		[0] = UMC_BAR[cha] + 0x10,
+		[1] = UMC_BAR[cha] + 0x28
+		},
+	[2] =	{
+		[0] = UMC_BAR[cha] + 0x30,
+		[1] = UMC_BAR[cha] + 0x20
+		},
+	[3] =	{
+		[0] = UMC_BAR[cha] + 0x40,
+		[1] = UMC_BAR[cha] + 0x28
+		}
+	};
 
 	for (chip = 0; chip < 4; chip++)
 	{
-	    for (sec = 0; sec < 2; sec++)
+	    for (sec = 0; sec < 4; sec++)
 	    {
+		union DATA ChipReg, MaskReg;
 		unsigned int addr, state;
 
 		addr = CHIP_BAR[sec][0] + 4 * chip;
@@ -260,6 +290,7 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 
 			__asm__ volatile
 			(
+			"DECODER:"				"\n\t"
 				"xorl	%%edx, %%edx"		"\n\t"
 				"bsrl	%[base], %%ecx" 	"\n\t"
 				"jz	1f"			"\n\t"
@@ -277,7 +308,7 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 				: "cc", "memory", "%ecx", "%edx"
 			);
 
-			MemSize += chipSize;
+			DIMM_Size += chipSize;
 
 		printf( "CHA[%u] MASK[%u:%u] @ 0x%08x[0x%08x] ChipSize[%u]\n",
 			cha, chip, sec, addr, MaskReg.dword, chipSize );
@@ -287,7 +318,8 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 		}
 	    }
 	}
-	printf( "Memory Size[%llu KB] [%llu MB]\n", MemSize, (MemSize >> 10));
+	printf( "\nDIMM Size[%llu KB] [%llu MB]\n\n",
+		DIMM_Size, (DIMM_Size >> 10) );
     }
 }
 
