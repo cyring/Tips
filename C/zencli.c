@@ -221,10 +221,11 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 	const unsigned int NC = ECX & 0xff;
 
 	const unsigned short factor = (NC == 0x3f) || (NC == 0x2f),
-		MaxChannels = (factor == 1) ? MAX_CHANNELS / 2 : MAX_CHANNELS;
+		MaxChannels = (factor == 1) ? (MAX_CHANNELS / 2) : MAX_CHANNELS;
 
 	unsigned short ChannelCount = 0, cha, chip, sec;
 
+	printf("\nData Fabric: scanning UMC ");
     for (cha = 0; cha < MaxChannels; cha++)
     {
 	union DATA SdpCtrl = {.dword = 0};
@@ -236,15 +237,15 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 	{
 		UMC_BAR[ChannelCount++] = SMU_AMD_UMC_BASE_CHA_F17H(ccd);
 	}
+	printf("%u ", ccd);
     }
-	printf("\nWelcome to the Data Fabric: UMC has %u/%u Channels\n\n",
-		ChannelCount, MaxChannels);
+	printf("for %u/%u Channels\n\n", ChannelCount, MaxChannels);
 
     for (cha = 0; cha < ChannelCount; cha++)
     {
 	unsigned long long DIMM_Size = 0;
 
-	const unsigned int CHIP_BAR[4][2] = {
+	const unsigned int CHIP_BAR[2][2] = {
 	[0] =	{
 		[0] = UMC_BAR[cha] + 0x0,
 		[1] = UMC_BAR[cha] + 0x20
@@ -252,20 +253,11 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 	[1] =	{
 		[0] = UMC_BAR[cha] + 0x10,
 		[1] = UMC_BAR[cha] + 0x28
-		},
-	[2] =	{
-		[0] = UMC_BAR[cha] + 0x30,
-		[1] = UMC_BAR[cha] + 0x20
-		},
-	[3] =	{
-		[0] = UMC_BAR[cha] + 0x40,
-		[1] = UMC_BAR[cha] + 0x28
 		}
 	};
-
 	for (chip = 0; chip < 4; chip++)
 	{
-	    for (sec = 0; sec < 4; sec++)
+	    for (sec = 0; sec < 2; sec++)
 	    {
 		union DATA ChipReg, MaskReg;
 		unsigned int addr, state;
