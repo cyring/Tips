@@ -197,7 +197,7 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 	#define MAX_CHANNELS	8
 
 	unsigned int UMC_BAR[MAX_CHANNELS] = { 0,0,0,0,0,0,0,0 };
-
+/*
 	unsigned int EAX, EBX, ECX, EDX;
 	__asm__ volatile
 	(
@@ -222,24 +222,23 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 
 	const unsigned short factor = (NC == 0x3f) || (NC == 0x2f),
 		MaxChannels = (factor == 1) ? (MAX_CHANNELS / 2) : MAX_CHANNELS;
-
+*/
 	unsigned short ChannelCount = 0, cha, chip, sec;
 
 	printf("\nData Fabric: scanning UMC ");
-    for (cha = 0; cha < MaxChannels; cha++)
+    for (cha = 0; cha < MAX_CHANNELS; cha++)
     {
 	union DATA SdpCtrl = {.dword = 0};
-	const unsigned short ccd = cha << factor;
 
-	SMU_Read(&SdpCtrl, SMU_AMD_UMC_BASE_CHA_F17H(ccd) + 0x104);
+	SMU_Read(&SdpCtrl, SMU_AMD_UMC_BASE_CHA_F17H(cha) + 0x104);
 
 	if ((SdpCtrl.dword != 0xffffffff) && (BITVAL(SdpCtrl.dword, 31)))
 	{
-		UMC_BAR[ChannelCount++] = SMU_AMD_UMC_BASE_CHA_F17H(ccd);
+		UMC_BAR[ChannelCount++] = SMU_AMD_UMC_BASE_CHA_F17H(cha);
 	}
-	printf("%u ", ccd);
+	printf("%u ", cha);
     }
-	printf("for %u/%u Channels\n\n", ChannelCount, MaxChannels);
+	printf("for %u Channels\n\n", ChannelCount);
 
     for (cha = 0; cha < ChannelCount; cha++)
     {
