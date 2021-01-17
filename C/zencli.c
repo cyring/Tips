@@ -103,7 +103,7 @@
 					BITVAL_2xPARAM ,		\
 					NULL)( __VA_ARGS__ )
 
-#define PCI_CONFIG_ADDRESS(bus, dev, fn, reg) \
+#define PCI_CONFIG_ADDRESS(bus, dev, fn, reg)				\
 	(0x80000000 | (bus << 16) | (dev << 11) | (fn << 8) | (reg & ~3))
 
 #define RDPCI(_data, _reg)						\
@@ -144,6 +144,7 @@
 
 #define SMU_AMD_INDEX_REGISTER_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0x60)
 #define SMU_AMD_DATA_REGISTER_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0x64)
+/* F17h PCI alternates addr: { 0xc4 , 0xc8 } - or - { 0xb4 , 0xb8 }	*/
 
 #define AMD_FCH_READ16(_data, _reg)					\
 ({									\
@@ -257,12 +258,12 @@ void OTH_Read(union DATA *data, unsigned int addr)
 
 void PCI_Read(union DATA *data, unsigned int addr)
 {
-	RDPCI(data->dword, PCI_CONFIG_ADDRESS(0, 0, 0, addr));
+	RDPCI(data->dword, addr);
 }
 
 void PCI_Write(union DATA *data, unsigned int addr)
 {
-	WRPCI(PCI_CONFIG_ADDRESS(0, 0, 0, addr), data->dword);
+	WRPCI(addr, data->dword);
 }
 
 void SMU_Read(union DATA *data, unsigned int addr)
@@ -447,7 +448,7 @@ char *component[LAST] = {
 	[OTH] = "oth", [BIOS] = "bios", [PM2] = "pm2"
 };
 
-void (*IC_Read[LAST])(union DATA*, unsigned int) = {
+void (*IC_Func[LAST])(union DATA*, unsigned int) = {
 	[SMU]	= SMU_Read,
 	[FCH]	= FCH_Read,
 	[UMC]	= UMC_Read,
@@ -477,15 +478,16 @@ void Help_Usage(int rc, char *program)
 		break;
 	case 3:
 		printf("Error: Invalid Hexadecimal Address\n" \
-			"\tExpected  0x1a2b3c4d\n");
+			"\tExpected  <addr> like 0x1a2b3c4d\n" \
+			"\tOr\t  <addr> like bus:0x1-dev:0x2-fn:0x3-reg:0xff\n");
 		break;
 	case 2:
 		printf("Error: Undefined component\n");
 		break;
 	case 1:
 	default:
-		printf( "Usage: %s <component> <addr>\n"	\
-			"Where: <component> is one of {", program	);
+		printf( "Usage: %s <component> [ <addr> ]\n"	\
+			"Where: <component> is one of {", program );
 		Help_Argument();
 		printf(" }\n");
 		break;
@@ -495,10 +497,12 @@ void Help_Usage(int rc, char *program)
 int main(int argc, char *argv[])
 {
 	int rc = 0;
-    if (argc != 3) {
+    if (argc < 2) {
 	rc = 1;
 	Help_Usage(rc, argv[0]);
-    } else {
+    }
+    else
+    {
 	enum IC ic;
 	for (ic = SMU; ic < LAST; ic++)
 	{
@@ -509,51 +513,71 @@ int main(int argc, char *argv[])
 	if (ic == LAST) {
 		rc = 2;
 		Help_Usage(rc, argv[0]);
-	} else {
+	}
+	else
+	{
 		unsigned int addr = 0x0;
-	    if (sscanf(argv[2], "0x%x", &addr) != 1)
+	    if (argc > 2) {
+	      if (1 != sscanf(argv[2], "0x%x", &addr))
+	      {
+		unsigned char _bus, _dev, _fn, _reg;
+		if (4 != sscanf(argv[2], "bus:0x%x-dev:0x%x-fn:0x%x-reg:0x%x",
+				&_bus, &_dev, &_fn, &_reg))
+		{
+			rc = 3;
+			Help_Usage(rc, argv[0]);
+		} else {
+			addr = PCI_CONFIG_ADDRESS(_bus, _dev, _fn, _reg);
+		}
+	      }
+	    }
+	    if (rc == 0)
 	    {
-		rc = 3;
-		Help_Usage(rc, argv[0]);
-	    } else {
 		uid_t uid = geteuid();
 		if (uid != 0) {
 			rc = 4;
 			Help_Usage(rc, argv[0]);
-		} else if (!iopl(3)) {
+		}
+		else if (!iopl(3))
+		{
 			union DATA data = { .dword = 0 };
-		    if (argc == 4) {
-			if (sscanf(argv[3], "0x%x", &data.dword) != 1) {
+		    if (argc == 4)
+		    {
+			if (1 != sscanf(argv[3], "0x%x", &data.dword)) {
 				rc = 3;
 				Help_Usage(rc, argv[0]);
 			}
 		    }
-			IC_Read[ic](&data, addr);
+		    if (rc == 0)
+		    {
+			IC_Func[ic](&data, addr);
 
-		    if (ic != UMC) {
-			char binStr[64];
-			unsigned short bit;
+			if (ic != UMC)
+			{
+				char binStr[64];
+				unsigned short bit;
 
-			Convert2Binary(data.dword, binStr);
+				Convert2Binary(data.dword, binStr);
 
-			printf("0x%08x (%u)\n", data.dword, data.dword);
+				printf("0x%08x (%u)\n", data.dword, data.dword);
 
-			for (bit = 63; bit > 0; bit--) {
-				if (bit % 4 == 0) {
-					printf("%02hu", bit);
-				} else {
-					printf(" ");
+				for (bit = 63; bit > 0; bit--) {
+					if (bit % 4 == 0) {
+						printf("%02hu", bit);
+					} else {
+						printf(" ");
+					}
 				}
-			}
-			printf("00\n ");
-			for (bit = 0; bit < 64; bit++) {
-				printf("%c", binStr[bit]);
-				if (bit < 63 && bit % 4 == 3) {
-					printf(" ");
+				printf("00\n ");
+				for (bit = 0; bit < 64; bit++) {
+					printf("%c", binStr[bit]);
+					if (bit < 63 && bit % 4 == 3) {
+						printf(" ");
+					}
 				}
+				printf("\n");
 			}
-			printf("\n");
-		     }
+		    }
 			iopl(0);
 		} else {
 			rc = 5;
