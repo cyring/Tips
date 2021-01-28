@@ -337,9 +337,8 @@ void ZEN2_Read(union DATA *data, unsigned int addr)
 		local.dword = 0;
 		SMU_Write(&local, RSP);
 
-		local.dword = 0;
 		for (unsigned int idx = 0; idx < 6; idx++) {
-			SMU_Write(&local, ARG + (idx * 4));
+			SMU_Write(data + (idx *4), ARG + (idx * 4));
 		}
 
 		local.dword = addr;
@@ -686,13 +685,13 @@ int main(int argc, char *argv[])
 				|| (ic == ZEN2)
 				|| (ic == ZEN3))
 			  {
-				union DATA out[6];
+				union DATA out[6] = { [0 ... 5] = 0x0 };
 				unsigned int idx;
 
 				IC_Func[ic][op](out, addr);
 
 
-				printf("[0x%08x] %s(%s) = 0x%08x (%u)\n", addr,
+				printf("[0x%08x] %s(%s)\n", addr,
 					what[op], component[ic]);
 
 			    for (idx = 0; idx < 6; idx++)
