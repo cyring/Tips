@@ -318,11 +318,8 @@ enum SMU_RC {
 	SMU_OK	= 0x01
 };
 
-#define CMD	/*	0x3b10524	*/	0x3b10530
-#define RSP	/*	0x3b10570	*/	0x3b1057c
-#define ARG	/*	0x3b10a40	*/	0x3b109c4
-
-void ZEN2_Read(union DATA *data, unsigned int addr)
+void SMU_MailBox( 	union DATA *data, unsigned int addr,
+			unsigned int CMD, unsigned int RSP, unsigned ARG )
 {
 	union DATA local = {.dword = 0};
 	unsigned int tries = 30000;
@@ -361,6 +358,19 @@ void ZEN2_Read(union DATA *data, unsigned int addr)
 		    }
 		}
 	}
+}
+
+#define CMD_MP_MTS	0x3b10524
+#define RSP_MP_MTS	0x3b10570
+#define ARG_MP_MTS	0x3b10a40
+
+#define CMD_MB_MTS	0x3b10530
+#define RSP_MB_MTS	0x3b1057c
+#define ARG_MB_MTS	0x3b109c4
+
+void ZEN2_Read(union DATA *data, unsigned int addr)
+{
+	SMU_MailBox(data, addr, CMD_MB_MTS, RSP_MB_MTS, ARG_MB_MTS);
 }
 
 #define ZEN3_Read	ZEN2_Read
