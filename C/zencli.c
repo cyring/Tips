@@ -1,7 +1,7 @@
 /*
  * zencli.c by CyrIng
  *
- * Copyright (C) 2020 CYRIL INGENIERIE
+ * Copyright (C) 2020-2021 CYRIL INGENIERIE
  * Licenses: GPL2
  *
  * - Build Instructions -
@@ -310,6 +310,63 @@ void PM2_Write(union DATA *data, unsigned int addr)
 	AMD_PM2_WRITE16(data->word, addr);
 }
 
+/* BEGIN
+ * Source: taken from the <Ryzen SMU> project
+ *	@ https://gitlab.com/leogx9r/ryzen_smu
+*/
+enum SMU_RC {
+	SMU_OK	= 0x01
+};
+
+#define CMD	/*	0x3b10524	*/	0x3b10530
+#define RSP	/*	0x3b10570	*/	0x3b1057c
+#define ARG	/*	0x3b10a40	*/	0x3b109c4
+
+void ZEN2_Read(union DATA *data, unsigned int addr)
+{
+	union DATA local = {.dword = 0};
+	unsigned int tries = 30000;
+	do {
+		SMU_Read(&local, RSP);
+		if (local.dword != 0) {
+			break;
+		}
+	} while (tries-- != 0);
+
+	if (tries > 0) {
+		local.dword = 0;
+		SMU_Write(&local, RSP);
+
+		local.dword = 0;
+		for (unsigned int idx = 0; idx < 6; idx++) {
+			SMU_Write(&local, ARG + (idx * 4));
+		}
+
+		local.dword = addr;
+		SMU_Write(&local, CMD);
+
+		local.dword = 0;
+		tries = 30000;
+		do {
+			SMU_Read(&local, RSP);
+			if (local.dword != 0) {
+				break;
+			}
+		} while (tries-- != 0);
+
+		if (tries > 0) {
+		    if (local.dword == SMU_OK) {
+			for (unsigned int idx = 0; idx < 6; idx++) {
+				SMU_Read(data + (idx *4), ARG + (idx * 4));
+			}
+		    }
+		}
+	}
+}
+
+#define ZEN3_Read	ZEN2_Read
+/* <Ryzen SMU>: END */
+
 #define MAX_CHANNELS	8
 #define SMU_AMD_UMC_BASE_CHA_F17H( _bar, _cha )	( _bar + (_cha << 20) )
 
@@ -453,6 +510,25 @@ void Convert2Binary(unsigned long long value, char *pBinStr)
 	}
 }
 
+void PrettyBin(char *pBinStr)
+{
+	unsigned short bit;
+	for (bit = 63; bit > 0; bit--) {
+		if (bit % 4 == 0) {
+			printf("%02hu", bit);
+		} else {
+			printf(" ");
+		}
+	}
+	printf("00\n ");
+	for (bit = 0; bit < 64; bit++) {
+		printf("%c", pBinStr[bit]);
+		if (bit < 63 && bit % 4 == 3) {
+			printf(" ");
+		}
+	}
+}
+
 enum OP {
 	READ,
 	WRITE,
@@ -464,15 +540,21 @@ enum IC {
 	FCH,
 	UMC,
 	PCI,
-	OTH,
 	BIOS,
 	PM2,
+	ZEN1,
+	ZEN12,
+	ZEN2,
+	ZEN3,
+	OTH,
 	LAST
 };
 
 char *component[LAST] = {
-	[SMU] = "smu", [FCH] = "fch", [UMC] = "umc", [PCI] = "pci",
-	[OTH] = "oth", [BIOS] = "bios", [PM2] = "pm2"
+	[SMU] = "smu" , [FCH] = "fch", [UMC] = "umc", [PCI] = "pci",
+	[BIOS] = "bios", [PM2] = "pm2",
+	[ZEN1] = "zen1", [ZEN12] = "zen12", [ZEN2] = "zen2", [ZEN3] = "zen3",
+	[OTH] = "oth" 
 };
 
 void (*IC_Func[LAST][OPS])(union DATA*, unsigned int) = {
@@ -480,9 +562,13 @@ void (*IC_Func[LAST][OPS])(union DATA*, unsigned int) = {
 	[FCH]	= { FCH_Read, FCH_WRITE },
 	[UMC]	= { UMC_Read, NULL	},
 	[PCI]	= { PCI_Read, PCI_Write },
-	[OTH]	= { OTH_Read, NULL	},
 	[BIOS]	= { BIOS_Read,BIOS_Write},
-	[PM2]	= { PM2_Read, PM2_Write }
+	[PM2]	= { PM2_Read, PM2_Write },
+	[ZEN1]	= { NULL,	NULL	},
+	[ZEN12] = { NULL,	NULL	},
+	[ZEN2]	= { ZEN2_Read,	NULL	},
+	[ZEN3]	= { ZEN3_Read,	NULL	},
+	[OTH]	= { OTH_Read, NULL	}
 };
 
 void Help_Argument(void)
@@ -517,9 +603,9 @@ void Help_Usage(int rc, char *ctx)
 	case 1:
 	default:
 		printf( "Usage: %s <component> [ <addr> ]\n"	\
-			"Where: <component> is one of {", ctx );
+			"Where: <component> is one of {\n\t", ctx );
 		Help_Argument();
-		printf(" }\n");
+		printf("\n}\n");
 		break;
 	}
 }
@@ -588,42 +674,54 @@ int main(int argc, char *argv[])
 
 			if (IC_Func[ic][op] != NULL)
 			{
-			    if (ic == UMC)
-			    {
-				IC_Func[ic][op](&data, addr);
-			    }
-			    else if (argc > 2)
-			    {
 				char binStr[64];
-				unsigned short bit;
 
+			  if (ic == UMC)
+			  {
 				IC_Func[ic][op](&data, addr);
+			  }
+			else
+				if((ic == ZEN1)
+				|| (ic == ZEN12)
+				|| (ic == ZEN2)
+				|| (ic == ZEN3))
+			  {
+				union DATA out[6];
+				unsigned int idx;
 
-				Convert2Binary(data.dword, binStr);
+				IC_Func[ic][op](out, addr);
+
+
+				printf("[0x%08x] %s(%s) = 0x%08x (%u)\n", addr,
+					what[op], component[ic]);
+
+			    for (idx = 0; idx < 6; idx++)
+			    {
+				printf("\n0x%08x (%u)\n",
+					out[idx].dword, out[idx].dword);
+
+				Convert2Binary(out[idx].dword, binStr);
+				PrettyBin(binStr);
+
+				printf("\n");
+			    }
+			  }
+			else if (argc > 2)
+			  {
+				IC_Func[ic][op](&data, addr);
 
 				printf("[0x%08x] %s(%s) = 0x%08x (%u)\n", addr,
 					what[op], component[ic],
 					data.dword, data.dword);
 
-				for (bit = 63; bit > 0; bit--) {
-					if (bit % 4 == 0) {
-						printf("%02hu", bit);
-					} else {
-						printf(" ");
-					}
-				}
-				printf("00\n ");
-				for (bit = 0; bit < 64; bit++) {
-					printf("%c", binStr[bit]);
-					if (bit < 63 && bit % 4 == 3) {
-						printf(" ");
-					}
-				}
+				Convert2Binary(data.dword, binStr);
+				PrettyBin(binStr);
+
 				printf("\n");
-			    } else {
+			  } else {
 				rc = 1;
 				Help_Usage(rc, argv[0]);
-			    }
+			  }
 			} else {
 				rc = 6;
 				Help_Usage(rc, what[op]);
