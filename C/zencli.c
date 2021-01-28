@@ -145,6 +145,8 @@
 #define SMU_AMD_INDEX_REGISTER_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0x60)
 #define SMU_AMD_DATA_REGISTER_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0x64)
 /* F17h PCI alternates addr: { 0xc4 , 0xc8 } - or - { 0xb4 , 0xb8 }	*/
+#define SMU_AMD_INDEX_REGISTER_ALT_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0xc4)
+#define SMU_AMD_DATA_REGISTER_ALT_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0xc8)
 
 #define AMD_FCH_READ16(_data, _reg)					\
 ({									\
@@ -272,9 +274,20 @@ void SMU_Read(union DATA *data, unsigned int addr)
 	RDPCI(data->dword, SMU_AMD_DATA_REGISTER_F17H);
 }
 
+void SMU_Write(union DATA *data, unsigned int addr)
+{
+	WRPCI(addr, SMU_AMD_INDEX_REGISTER_F17H);
+	WRPCI(SMU_AMD_DATA_REGISTER_F17H, data->dword);
+}
+
 void FCH_Read(union DATA *data, unsigned int addr)
 {
 	AMD_FCH_READ16(data->word, addr);
+}
+
+void FCH_WRITE(union DATA *data, unsigned int addr)
+{
+	AMD_FCH_WRITE16(data->word, addr);
 }
 
 void BIOS_Read(union DATA *data, unsigned int addr)
@@ -282,9 +295,19 @@ void BIOS_Read(union DATA *data, unsigned int addr)
 	AMD_BIOS_READ16(data->word, addr);
 }
 
+void BIOS_Write(union DATA *data, unsigned int addr)
+{
+	AMD_BIOS_WRITE16(data->word, addr);
+}
+
 void PM2_Read(union DATA *data, unsigned int addr)
 {
 	AMD_PM2_READ16(data->word, addr);
+}
+
+void PM2_Write(union DATA *data, unsigned int addr)
+{
+	AMD_PM2_WRITE16(data->word, addr);
 }
 
 #define MAX_CHANNELS	8
@@ -430,12 +453,17 @@ void Convert2Binary(unsigned long long value, char *pBinStr)
 	}
 }
 
+enum OP {
+	READ,
+	WRITE,
+	OPS
+};
+
 enum IC {
 	SMU,
 	FCH,
 	UMC,
-	READ,
-	WRITE,
+	PCI,
 	OTH,
 	BIOS,
 	PM2,
@@ -443,20 +471,18 @@ enum IC {
 };
 
 char *component[LAST] = {
-	[SMU] = "smu", [FCH] = "fch", [UMC] = "umc",
-	[READ] = "read", [WRITE] = "write",
+	[SMU] = "smu", [FCH] = "fch", [UMC] = "umc", [PCI] = "pci",
 	[OTH] = "oth", [BIOS] = "bios", [PM2] = "pm2"
 };
 
-void (*IC_Func[LAST])(union DATA*, unsigned int) = {
-	[SMU]	= SMU_Read,
-	[FCH]	= FCH_Read,
-	[UMC]	= UMC_Read,
-	[READ]	= PCI_Read,
-	[WRITE] = PCI_Write,
-	[OTH]	= OTH_Read,
-	[BIOS]	= BIOS_Read,
-	[PM2]	= PM2_Read
+void (*IC_Func[LAST][OPS])(union DATA*, unsigned int) = {
+	[SMU]	= { SMU_Read, SMU_Write },
+	[FCH]	= { FCH_Read, FCH_WRITE },
+	[UMC]	= { UMC_Read, NULL	},
+	[PCI]	= { PCI_Read, PCI_Write },
+	[OTH]	= { OTH_Read, NULL	},
+	[BIOS]	= { BIOS_Read,BIOS_Write},
+	[PM2]	= { PM2_Read, PM2_Write }
 };
 
 void Help_Argument(void)
@@ -467,27 +493,31 @@ void Help_Argument(void)
 	}
 }
 
-void Help_Usage(int rc, char *program)
+void Help_Usage(int rc, char *ctx)
 {
 	switch (rc) {
+	case 6:
+		printf("Sorry: %s Operation Unimplemented\n", ctx);
+		break;
 	case 5:
-		printf("IOPL Not Permitted\n\n");
+		printf("Prerequisite: IOPL Not Permitted\n\n");
 		break;
 	case 4:
-		printf("Error: Missing root privileges\n");
+		printf("Prerequisite: Missing root privileges\n");
 		break;
 	case 3:
-		printf("Error: Invalid Hexadecimal Address\n" \
-			"\tExpected  <addr> like 0x1a2b3c4d\n" \
-			"\tOr\t  <addr> like bus:0x1-dev:0x2-fn:0x3-reg:0xff\n");
+		printf("Syntax: Invalid Hexadecimal Address\n"	\
+			"\tExpected  <addr> like 0x1a2b3c4d\n"	\
+			"\tOr"					\
+			"\t  <addr> like bus:0x1-dev:0x2-fn:0x3-reg:0xff\n");
 		break;
 	case 2:
-		printf("Error: Undefined component\n");
+		printf("Syntax: '%s' Undefined component\n", ctx);
 		break;
 	case 1:
 	default:
 		printf( "Usage: %s <component> [ <addr> ]\n"	\
-			"Where: <component> is one of {", program );
+			"Where: <component> is one of {", ctx );
 		Help_Argument();
 		printf(" }\n");
 		break;
@@ -506,23 +536,34 @@ int main(int argc, char *argv[])
 	enum IC ic;
 	for (ic = SMU; ic < LAST; ic++)
 	{
-	    if (!strncmp(component[ic], argv[1], strlen(component[ic]))) {
+		const size_t nc = strlen(component[ic]);
+	    if ((strlen(argv[1]) == nc) && !strncmp(component[ic], argv[1], nc))
+	    {
 		break;
 	    }
 	}
 	if (ic == LAST) {
 		rc = 2;
-		Help_Usage(rc, argv[0]);
+		Help_Usage(rc, argv[1]);
 	}
 	else
 	{
+		union DATA data = { .dword = 0 };
 		unsigned int addr = 0x0;
+		char tr = 0;
+	    if (argc > 3)
+	    {
+		if (1 != sscanf(argv[3], "0x%x%c", &data.dword, &tr)) {
+			rc = 3;
+			Help_Usage(rc, argv[0]);
+		}
+	    }
 	    if (argc > 2) {
-	      if (1 != sscanf(argv[2], "0x%x", &addr))
+	      if (1 != sscanf(argv[2], "0x%x%c", &addr, &tr))
 	      {
 		unsigned char _bus, _dev, _fn, _reg;
-		if (4 != sscanf(argv[2], "bus:0x%x-dev:0x%x-fn:0x%x-reg:0x%x",
-				&_bus, &_dev, &_fn, &_reg))
+		if (4 != sscanf(argv[2], "bus:0x%x-dev:0x%x-fn:0x%x-reg:0x%x%c",
+				&_bus, &_dev, &_fn, &_reg, &tr))
 		{
 			rc = 3;
 			Help_Usage(rc, argv[0]);
@@ -540,26 +581,29 @@ int main(int argc, char *argv[])
 		}
 		else if (!iopl(3))
 		{
-			union DATA data = { .dword = 0 };
-		    if (argc == 4)
-		    {
-			if (1 != sscanf(argv[3], "0x%x", &data.dword)) {
-				rc = 3;
-				Help_Usage(rc, argv[0]);
-			}
-		    }
 		    if (rc == 0)
 		    {
-			IC_Func[ic](&data, addr);
+			const enum OP op = (argc > 3) ? WRITE : READ;
+			char *what[OPS] = { "READ" , "WRITE" };
 
-			if (ic != UMC)
+			if (IC_Func[ic][op] != NULL)
 			{
+			    if (ic == UMC)
+			    {
+				IC_Func[ic][op](&data, addr);
+			    }
+			    else if (argc > 2)
+			    {
 				char binStr[64];
 				unsigned short bit;
 
+				IC_Func[ic][op](&data, addr);
+
 				Convert2Binary(data.dword, binStr);
 
-				printf("0x%08x (%u)\n", data.dword, data.dword);
+				printf("[0x%08x] %s(%s) = 0x%08x (%u)\n", addr,
+					what[op], component[ic],
+					data.dword, data.dword);
 
 				for (bit = 63; bit > 0; bit--) {
 					if (bit % 4 == 0) {
@@ -576,6 +620,13 @@ int main(int argc, char *argv[])
 					}
 				}
 				printf("\n");
+			    } else {
+				rc = 1;
+				Help_Usage(rc, argv[0]);
+			    }
+			} else {
+				rc = 6;
+				Help_Usage(rc, what[op]);
 			}
 		    }
 			iopl(0);
