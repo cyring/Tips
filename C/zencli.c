@@ -248,7 +248,7 @@
 })
 
 union DATA {
-	unsigned short	word;
+	unsigned short	word[2];
 	unsigned int	dword;
 };
 
@@ -282,32 +282,32 @@ void SMU_Write(union DATA *data, unsigned int addr)
 
 void FCH_Read(union DATA *data, unsigned int addr)
 {
-	AMD_FCH_READ16(data->word, addr);
+	AMD_FCH_READ16(data->word[0], addr);
 }
 
 void FCH_WRITE(union DATA *data, unsigned int addr)
 {
-	AMD_FCH_WRITE16(data->word, addr);
+	AMD_FCH_WRITE16(data->word[0], addr);
 }
 
 void BIOS_Read(union DATA *data, unsigned int addr)
 {
-	AMD_BIOS_READ16(data->word, addr);
+	AMD_BIOS_READ16(data->word[0], addr);
 }
 
 void BIOS_Write(union DATA *data, unsigned int addr)
 {
-	AMD_BIOS_WRITE16(data->word, addr);
+	AMD_BIOS_WRITE16(data->word[0], addr);
 }
 
 void PM2_Read(union DATA *data, unsigned int addr)
 {
-	AMD_PM2_READ16(data->word, addr);
+	AMD_PM2_READ16(data->word[0], addr);
 }
 
 void PM2_Write(union DATA *data, unsigned int addr)
 {
-	AMD_PM2_WRITE16(data->word, addr);
+	AMD_PM2_WRITE16(data->word[0], addr);
 }
 
 /* BEGIN
@@ -676,66 +676,86 @@ int main(int argc, char *argv[])
 		}
 		else if (!iopl(3))
 		{
-		    if (rc == 0)
-		    {
+		  if (rc == 0)
+		  {
+			char binStr[64];
 			const enum OP op = (argc > 3) ? WRITE : READ;
 			char *what[OPS] = { "READ" , "WRITE" };
 
+		    if (ic == UMC)
+		    {
 			if (IC_Func[ic][op] != NULL)
 			{
-				char binStr[64];
-
-			  if (ic == UMC)
-			  {
 				IC_Func[ic][op](&data, addr);
-			  }
+			}
 			else
-				if((ic == ZEN1)
-				|| (ic == ZEN12)
-				|| (ic == ZEN2)
-				|| (ic == ZEN3))
-			  {
-				union DATA out[6] = { [0 ... 5] = 0x0 };
-				unsigned int idx;
+			{
+				rc = 6;
+				Help_Usage(rc, what[op]);
+			}
+		    }
+		    else
+			if((ic == ZEN1)
+			|| (ic == ZEN12)
+			|| (ic == ZEN2)
+			|| (ic == ZEN3))
+		    {
+			union DATA out[6] = {
+				[0] = data,
+				[1 ... 5] = 0x0
+			};
 
-				IC_Func[ic][op](out, addr);
+		      if (IC_Func[ic][READ] != NULL)
+		      {
+			unsigned int idx;
 
+			printf( "[0x%08x] %s(%s) INIT<0x%08x>\n", addr,
+				what[READ], component[ic], out[0].dword );
 
-				printf("[0x%08x] %s(%s)\n", addr,
-					what[op], component[ic]);
+			IC_Func[ic][READ](out, addr);
 
-			    for (idx = 0; idx < 6; idx++)
-			    {
-				printf("\n0x%08x (%u)\n",
-					out[idx].dword, out[idx].dword);
+			for (idx = 0; idx < 6; idx++)
+			{
+				printf( "\n0x%08x (%u)\n",
+					out[idx].dword, out[idx].dword );
 
 				Convert2Binary(out[idx].dword, binStr);
 				PrettyBin(binStr);
 
 				printf("\n");
-			    }
-			  }
-			else if (argc > 2)
-			  {
-				IC_Func[ic][op](&data, addr);
-
-				printf("[0x%08x] %s(%s) = 0x%08x (%u)\n", addr,
-					what[op], component[ic],
-					data.dword, data.dword);
-
-				Convert2Binary(data.dword, binStr);
-				PrettyBin(binStr);
-
-				printf("\n");
-			  } else {
-				rc = 1;
-				Help_Usage(rc, argv[0]);
-			  }
-			} else {
-				rc = 6;
-				Help_Usage(rc, what[op]);
 			}
+		      }
+		      else
+		      {
+			rc = 6;
+			Help_Usage(rc, what[READ]);
+		      }
 		    }
+		    else if (argc > 2)
+		    {
+		      if (IC_Func[ic][op] != NULL)
+		      {
+			IC_Func[ic][op](&data, addr);
+
+			printf("[0x%08x] %s(%s) = 0x%08x (%u)\n", addr,
+				what[op], component[ic],
+				data.dword, data.dword);
+
+			Convert2Binary(data.dword, binStr);
+			PrettyBin(binStr);
+
+			printf("\n");
+		      }
+		      else
+		      {
+			rc = 6;
+			Help_Usage(rc, what[op]);
+		      }
+		    } else {
+			rc = 1;
+			Help_Usage(rc, argv[0]);
+		    }
+		  }
 			iopl(0);
 		} else {
 			rc = 5;
