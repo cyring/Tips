@@ -318,47 +318,7 @@ enum SMU_RC {
 	SMU_OK	= 0x01
 };
 
-void SMU_MailBox( 	union DATA *data, unsigned int addr,
-			unsigned int CMD, unsigned int RSP, unsigned ARG )
-{
-	union DATA local = {.dword = 0};
-	unsigned int tries = 30000;
-	do {
-		SMU_Read(&local, RSP);
-		if (local.dword != 0) {
-			break;
-		}
-	} while (tries-- != 0);
-
-	if (tries > 0) {
-		local.dword = 0;
-		SMU_Write(&local, RSP);
-
-		for (unsigned int idx = 0; idx < 6; idx++) {
-			SMU_Write(data + (idx *4), ARG + (idx * 4));
-		}
-
-		local.dword = addr;
-		SMU_Write(&local, CMD);
-
-		local.dword = 0;
-		tries = 30000;
-		do {
-			SMU_Read(&local, RSP);
-			if (local.dword != 0) {
-				break;
-			}
-		} while (tries-- != 0);
-
-		if (tries > 0) {
-		    if (local.dword == SMU_OK) {
-			for (unsigned int idx = 0; idx < 6; idx++) {
-				SMU_Read(data + (idx *4), ARG + (idx * 4));
-			}
-		    }
-		}
-	}
-}
+#define ARG_DIM 6
 
 #define CMD_MP_MTS	0x3b10524
 #define RSP_MP_MTS	0x3b10570
@@ -367,6 +327,55 @@ void SMU_MailBox( 	union DATA *data, unsigned int addr,
 #define CMD_MB_MTS	0x3b10530
 #define RSP_MB_MTS	0x3b1057c
 #define ARG_MB_MTS	0x3b109c4
+
+void SMU_MailBox( 	union DATA *data, unsigned int addr,
+			unsigned int CMD, unsigned int RSP, unsigned ARG )
+{
+	union DATA local = {.dword = 0};
+	unsigned int tries = 0x7fff;
+    do {
+	SMU_Read(&local, RSP);
+	if (local.dword != 0) {
+		break;
+	}
+    } while (tries-- != 0);
+
+    if (tries > 0)
+    {
+	unsigned int idx;
+
+	local.dword = 0;
+	SMU_Write(&local, RSP);
+
+	for (idx = 0; idx < ARG_DIM; idx++) {
+		union DATA *pdata = data + idx;
+		unsigned int addr = ARG + (idx * sizeof(union DATA));
+		SMU_Write(pdata, addr);
+	}
+
+	local.dword = addr;
+	SMU_Write(&local, CMD);
+
+	local.dword = 0;
+	tries = 0x7fff;
+	do {
+		SMU_Read(&local, RSP);
+		if (local.dword != 0) {
+			break;
+		}
+	} while (tries-- != 0);
+
+	if (tries > 0) {
+	    if (local.dword == SMU_OK) {
+		for (idx = 0; idx < ARG_DIM; idx++) {
+			union DATA *pdata = data + idx;
+			unsigned int addr = ARG + (idx * sizeof(union DATA));
+			SMU_Read(pdata, addr);
+		}
+	    }
+	}
+    }
+}
 
 void ZEN2_Read(union DATA *data, unsigned int addr)
 {
@@ -601,8 +610,8 @@ void Help_Usage(int rc, char *ctx)
 		printf("Prerequisite: Missing root privileges\n");
 		break;
 	case 3:
-		printf("Syntax: Invalid Hexadecimal Address\n"	\
-			"\tExpected  <addr> like 0x1a2b3c4d\n"	\
+		printf("Syntax: Invalid Hexadecimal Address or Data value\n" \
+			"\tExpected  <addr> and <data> like 0x1a2b3c4d\n"	\
 			"\tOr"					\
 			"\t  <addr> like bus:0x1-dev:0x2-fn:0x3-reg:0xff\n");
 		break;
@@ -611,7 +620,7 @@ void Help_Usage(int rc, char *ctx)
 		break;
 	case 1:
 	default:
-		printf( "Usage: %s <component> [ <addr> ]\n"	\
+		printf( "Usage: %s <component> [<addr>] [<data> ... <data>]\n" \
 			"Where: <component> is one of {\n\t", ctx );
 		Help_Argument();
 		printf("\n}\n");
@@ -700,21 +709,30 @@ int main(int argc, char *argv[])
 			|| (ic == ZEN2)
 			|| (ic == ZEN3))
 		    {
-			union DATA out[6] = {
-				[0] = data,
-				[1 ... 5] = 0x0
-			};
-
-		      if (IC_Func[ic][READ] != NULL)
+			union DATA out[ARG_DIM] = {0x0,0x0,0x0,0x0,0x0,0x0};
+			unsigned int arg, idx;
+		      for (arg = 3, idx = 0;
+				arg < argc && idx < ARG_DIM;
+					arg++, idx++)
 		      {
-			unsigned int idx;
-
-			printf( "[0x%08x] %s(%s) INIT<0x%08x>\n", addr,
-				what[READ], component[ic], out[0].dword );
+			char tr = 0;
+			if(1 != sscanf(argv[arg],"0x%x%c",&out[idx].dword, &tr))
+			{
+				rc = 3;
+				Help_Usage(rc, argv[0]);
+			}
+		      }
+		      if ((IC_Func[ic][READ] != NULL) && (rc == 0))
+		      {
+			printf( "[0x%08x] %s(%s) "			\
+				"INIT={0x%x,0x%x,0x%x,0x%x,0x%x,0x%x}\n",
+				addr, what[READ], component[ic],
+				out[0].dword, out[1].dword, out[2].dword,
+				out[3].dword, out[4].dword, out[5].dword );
 
 			IC_Func[ic][READ](out, addr);
 
-			for (idx = 0; idx < 6; idx++)
+			for (idx = 0; idx < ARG_DIM; idx++)
 			{
 				printf( "\n0x%08x (%u)\n",
 					out[idx].dword, out[idx].dword );
@@ -725,7 +743,7 @@ int main(int argc, char *argv[])
 				printf("\n");
 			}
 		      }
-		      else
+		      else if (IC_Func[ic][READ] == NULL)
 		      {
 			rc = 6;
 			Help_Usage(rc, what[READ]);
