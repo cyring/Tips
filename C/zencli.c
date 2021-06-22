@@ -145,7 +145,7 @@
 #define SMU_AMD_INDEX_REGISTER_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0x60)
 #define SMU_AMD_DATA_REGISTER_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0x64)
 /* F17h PCI alternates addr: { 0xc4 , 0xc8 } - or - { 0xb4 , 0xb8 }	*/
-#define SMU_AMD_INDEX_REGISTER_ALT_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0xc4)
+#define SMU_AMD_INDEX_REGISTER_ALT_F17H PCI_CONFIG_ADDRESS(0, 0, 0, 0xc4)
 #define SMU_AMD_DATA_REGISTER_ALT_F17H	PCI_CONFIG_ADDRESS(0, 0, 0, 0xc8)
 
 #define AMD_FCH_READ16(_data, _reg)					\
@@ -248,8 +248,8 @@
 })
 
 union DATA {
-	unsigned short	word[2];
 	unsigned int	dword;
+	unsigned short	word[2];
 };
 
 void OTH_Read(union DATA *data, unsigned int addr)
@@ -270,14 +270,20 @@ void PCI_Write(union DATA *data, unsigned int addr)
 
 void SMU_Read(union DATA *data, unsigned int addr)
 {
-	WRPCI(addr, SMU_AMD_INDEX_REGISTER_F17H);
-	RDPCI(data->dword, SMU_AMD_DATA_REGISTER_F17H);
+	WRPCI(addr, SMU_AMD_INDEX_REGISTER_ALT_F17H);
+	RDPCI(data->dword, SMU_AMD_DATA_REGISTER_ALT_F17H);
+#if DEBUG == 1
+	printf(" SMU_Read (%08x, %08x)\n",addr, data->dword);
+#endif
 }
 
 void SMU_Write(union DATA *data, unsigned int addr)
 {
-	WRPCI(addr, SMU_AMD_INDEX_REGISTER_F17H);
-	WRPCI(SMU_AMD_DATA_REGISTER_F17H, data->dword);
+#if DEBUG == 1
+	printf("SMU_Write (%08x, %08x)\n",addr, data->dword);
+#endif
+	WRPCI(addr, SMU_AMD_INDEX_REGISTER_ALT_F17H);
+	WRPCI(SMU_AMD_DATA_REGISTER_ALT_F17H, data->dword);
 }
 
 void FCH_Read(union DATA *data, unsigned int addr)
@@ -327,6 +333,10 @@ enum SMU_RC {
 #define CMD_MB_MTS	0x3b10530
 #define RSP_MB_MTS	0x3b1057c
 #define ARG_MB_MTS	0x3b109c4
+
+#define CMD_MB_HSMP	0x3b10534
+#define RSP_MB_HSMP	0x3b10980
+#define ARG_MB_HSMP	0x3b109e0
 
 void SMU_MailBox( 	union DATA *data, unsigned int addr,
 			unsigned int CMD, unsigned int RSP, unsigned ARG )
@@ -383,6 +393,12 @@ void ZEN2_Read(union DATA *data, unsigned int addr)
 }
 
 #define ZEN3_Read	ZEN2_Read
+
+void HSMP_Read(union DATA *data, unsigned int addr)
+{
+	SMU_MailBox(data, addr, CMD_MB_HSMP, RSP_MB_HSMP, ARG_MB_HSMP);
+}
+
 /* <Ryzen SMU>: END */
 
 #define MAX_CHANNELS	8
@@ -564,6 +580,7 @@ enum IC {
 	ZEN12,
 	ZEN2,
 	ZEN3,
+	HSMP,
 	OTH,
 	LAST
 };
@@ -572,7 +589,7 @@ char *component[LAST] = {
 	[SMU] = "smu" , [FCH] = "fch", [UMC] = "umc", [PCI] = "pci",
 	[BIOS] = "bios", [PM2] = "pm2",
 	[ZEN1] = "zen1", [ZEN12] = "zen12", [ZEN2] = "zen2", [ZEN3] = "zen3",
-	[OTH] = "oth" 
+	[HSMP] = "hsmp", [OTH] = "oth" 
 };
 
 void (*IC_Func[LAST][OPS])(union DATA*, unsigned int) = {
@@ -586,6 +603,7 @@ void (*IC_Func[LAST][OPS])(union DATA*, unsigned int) = {
 	[ZEN12] = { NULL,	NULL	},
 	[ZEN2]	= { ZEN2_Read,	NULL	},
 	[ZEN3]	= { ZEN3_Read,	NULL	},
+	[HSMP]	= { HSMP_Read,	NULL	},
 	[OTH]	= { OTH_Read, NULL	}
 };
 
@@ -652,7 +670,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		union DATA data = { .dword = 0 };
+		union DATA data __attribute__ ((aligned (4))) = { .dword = 0 };
 		unsigned int addr = 0x0;
 		char tr = 0;
 	    if (argc > 3)
@@ -707,9 +725,12 @@ int main(int argc, char *argv[])
 			if((ic == ZEN1)
 			|| (ic == ZEN12)
 			|| (ic == ZEN2)
-			|| (ic == ZEN3))
+			|| (ic == ZEN3)
+			|| (ic == HSMP))
 		    {
-			union DATA out[ARG_DIM] = {0x0,0x0,0x0,0x0,0x0,0x0};
+			union DATA out[ARG_DIM] __attribute__ ((aligned (4)))={
+				0x0,0x0,0x0,0x0,0x0,0x0
+			};
 			unsigned int arg, idx;
 		      for (arg = 3, idx = 0;
 				arg < argc && idx < ARG_DIM;
