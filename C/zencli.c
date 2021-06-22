@@ -14,6 +14,79 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <time.h>
+
+typedef unsigned long long int	Bit64;
+
+#define LOCKLESS " "
+#define BUS_LOCK "lock "
+
+#define BIT_ATOM_INIT(atom, seed)					\
+({									\
+	__asm__ volatile						\
+	(								\
+		"leaq	%[_atom],	%%rdx"		"\n\t"		\
+		"movq	%[_seed],	%%rax"		"\n\t"		\
+		"movq	%%rax	,	(%%rdx)" 			\
+		:							\
+		: [_atom]	"m"	(atom) ,			\
+		  [_seed]	"i"	(seed)				\
+		: "%rax", "%rdx", "memory"				\
+	);								\
+})
+
+#define BIT_ATOM_TRYLOCK(_lock, atom, seed)				\
+({									\
+	volatile unsigned char _ret;					\
+									\
+	__asm__ volatile						\
+	(								\
+		"movq	%[_seed],	%%rdx"		"\n\t"		\
+		"movl	%%edx	,	%%eax"		"\n\t"		\
+		"movq	$0xffffffff,	%%rbx"		"\n\t"		\
+		"andq	%%rbx	,	%%rax"		"\n\t"		\
+		"shrq	$32	,	%%rdx"		"\n\t"		\
+		"xorq	%%rcx	,	%%rcx"		"\n\t"		\
+		"xorq	%%rbx	,	%%rbx"		"\n\t"		\
+		_lock	"cmpxchg8b	%[_atom]"	"\n\t"		\
+		"setz	%[_ret]"					\
+		: [_ret]	"+m"	(_ret)				\
+		: [_atom]	"m"	(atom) ,			\
+		  [_seed]	"i"	(seed)				\
+		: "%rax", "%rbx", "%rcx", "%rdx", "cc", "memory"	\
+	);								\
+	_ret;								\
+})
+
+#define BIT_ATOM_UNLOCK(_lock, atom, seed)				\
+({									\
+	volatile unsigned long long tries;				\
+									\
+	__asm__ volatile						\
+	(								\
+		"movq	%[count],	%%r12"		"\n\t"		\
+	"1:"						"\n\t"		\
+		"subq	$1	,	%%r12"		"\n\t"		\
+		"jz	2f"				"\n\t"		\
+		"movq	%[_seed],	%%rcx"		"\n\t"		\
+		"movl	%%ecx	,	%%ebx"		"\n\t"		\
+		"movq	$0xffffffff,	%%rax"		"\n\t"		\
+		"andq	%%rax	,	%%rbx"		"\n\t"		\
+		"shrq	$32	,	%%rcx"		"\n\t"		\
+		"xorq	%%rdx	,	%%rdx"		"\n\t"		\
+		"xorq	%%rax	,	%%rax"		"\n\t"		\
+		_lock	"cmpxchg8b	%[_atom]"	"\n\t"		\
+		"jnz	1b"				"\n\t"		\
+	"2:"						"\n\t"		\
+		"movq	%%r12	,	%[tries]"			\
+		: [tries]	"+m"	(tries) 			\
+		: [_atom]	"m"	(atom) ,			\
+		  [_seed]	"i"	(seed) ,			\
+		  [count]	"i"	(BIT_IO_RETRIES_COUNT)		\
+		: "%rax", "%rbx", "%rcx", "%rdx", "%r12", "cc", "memory"\
+	);								\
+	tries;								\
+})
 
 #define _BITVAL_GPR(_lock,_base, _offset)				\
 ({									\
@@ -138,6 +211,30 @@
 		: "%rax", "%rdx", "memory"				\
 	);								\
 })
+
+#define pr_warn(fmt, ...)	fprintf(stderr, fmt, __VA_ARGS__)
+
+#define TIMESPEC(nsec)							\
+({									\
+	struct timespec tsec = {					\
+		.tv_sec  = (time_t) 0,					\
+		.tv_nsec = nsec						\
+	};								\
+	tsec;								\
+})
+
+#define udelay(interval)						\
+({									\
+	struct timespec rqtp = TIMESPEC(interval);			\
+	nanosleep(&rqtp, NULL);						\
+})
+
+#define ATOMIC_SEED 0x436f726546726571LLU
+
+#define BIT_IO_RETRIES_COUNT	80
+#define BIT_IO_DELAY_INTERVAL	150	/*	in udelay() unit	*/
+
+static Bit64	AMD_SMN_LOCK __attribute__ ((aligned (8)));
 
 #define SMU_AMD_INDEX_REGISTER_F15H	PCI_CONFIG_ADDRESS(0, 0, 0, 0xb8)
 #define SMU_AMD_DATA_REGISTER_F15H	PCI_CONFIG_ADDRESS(0, 0, 0, 0xbc)
@@ -316,90 +413,179 @@ void PM2_Write(union DATA *data, unsigned int addr)
 	AMD_PM2_WRITE16(data->word[0], addr);
 }
 
-/* BEGIN
- * Source: taken from the <Ryzen SMU> project
- *	@ https://gitlab.com/leogx9r/ryzen_smu
-*/
-enum SMU_RC {
-	SMU_OK	= 0x01
+/* Sources: PPR Vol 2 for AMD Family 19h Model 01h B1			*/
+#define SMU_HSMP_F19H	/*Cmd:*/0x3b10534, /*Arg:*/0x3b109e0, /*Rsp:*/0x3b10980
+
+enum HSMP_FUNC {
+	HSMP_TEST_MSG	= 0x1,	/* Returns [ARG0] + 1			*/
+	HSMP_RD_SMU_VER = 0x2,	/* SMU FW Version			*/
+	HSMP_RD_VERSION = 0x3,	/* Interface Version			*/
+	HSMP_RD_CUR_PWR = 0x4,	/* Current Socket power (mWatts)	*/
+	HSMP_WR_PKG_PL1 = 0x5,	/* Input within [31:0]; Limit (mWatts)	*/
+	HSMP_RD_PKG_PL1 = 0x6,	/* Returns Socket power limit (mWatts)	*/
+	HSMP_RD_MAX_PPT = 0x7,	/* Max Socket power limit (mWatts)	*/
+	HSMP_WR_SMT_BOOST=0x8,	/* ApicId[31:16], Max Freq. (MHz)[15:0] */
+	HSMP_WR_ALL_BOOST=0x9,	/* Max Freq. (MHz)[15:0] for ALL	*/
+	HSMP_RD_SMT_BOOST=0xa,	/* Input ApicId[15:0]; Dflt Fmax[15:0]	*/
+	HSMP_RD_PROCHOT = 0xb,	/* 1 = PROCHOT is asserted		*/
+	HSMP_WR_XGMI_WTH= 0xc,	/* 0 = x2, 1 = x8, 2 = x16		*/
+	HSMP_RD_APB_PST = 0xd,	/* Data Fabric P-state[7-0]={0,1,2,3}	*/
+	HSMP_ENABLE_APB = 0xe,	/* Data Fabric P-State Performance Boost*/
+	HSMP_RD_DF_MCLK = 0xf,	/* FCLK[ARG:0], MEMCLK[ARG:1] (MHz)	*/
+	HSMP_RD_CCLK	= 0x10, /* CPU core clock limit (MHz)		*/
+	HSMP_RD_PC0	= 0x11, /* Socket C0 Residency (100%)		*/
+	HSMP_WR_DPM_LCLK= 0x12, /* NBIO[24:16]; Max[15:8], Min[7:0] DPM */
+	HSMP_RESERVED	= 0x13,
+	HSMP_RD_DDR_BW	= 0x14	/* Max[31:20];Usage{Gbps[19:8],Pct[7:0]}*/
 };
 
-#define ARG_DIM 6
+enum {
+	HSMP_UNSPECIFIED= 0x0,
+	HSMP_RESULT_OK	= 0x1,
+	HSMP_FAIL_BGN	= 0x2,
+	HSMP_FAIL_END	= 0xfd,
+	HSMP_INVAL_MSG	= 0xfe,
+	HSMP_INVAL_INPUT= 0xff
+};
 
-#define CMD_MP_MTS	0x3b10524
-#define RSP_MP_MTS	0x3b10570
-#define ARG_MP_MTS	0x3b10a40
+#define ARG_DIM 8
 
-#define CMD_MB_MTS	0x3b10530
-#define RSP_MB_MTS	0x3b1057c
-#define ARG_MB_MTS	0x3b109c4
-
-#define CMD_MB_HSMP	0x3b10534
-#define RSP_MB_HSMP	0x3b10980
-#define ARG_MB_HSMP	0x3b109e0
-
-void SMU_MailBox( 	union DATA *data, unsigned int addr,
-			unsigned int CMD, unsigned int RSP, unsigned ARG )
+typedef union
 {
-	union DATA local = {.dword = 0};
-	unsigned int tries = 0x7fff;
-    do {
-	SMU_Read(&local, RSP);
-	if (local.dword != 0) {
-		break;
-	}
-    } while (tries-- != 0);
+	unsigned int		value;
+	struct
+	{
+		unsigned int
+		bits		: 32-0;
+	};
+} HSMP_ARG;
 
-    if (tries > 0)
-    {
-	unsigned int idx;
+#define AMD_HSMP_Mailbox(	MSG_FUNC,				\
+				MSG_ARG,				\
+				HSMP_CmdRegister,			\
+				HSMP_ArgRegister,			\
+				HSMP_RspRegister,			\
+				SMU_IndexRegister,			\
+				SMU_DataRegister )			\
+({									\
+	HSMP_ARG MSG_RSP = {.value = 0x0};				\
+	HSMP_ARG MSG_ID = {.value = MSG_FUNC};				\
+	unsigned int tries = BIT_IO_RETRIES_COUNT;			\
+	unsigned char ret;						\
+  do {									\
+	ret = BIT_ATOM_TRYLOCK( BUS_LOCK,				\
+				AMD_SMN_LOCK,				\
+				ATOMIC_SEED );				\
+    if ( ret == 0 ) {							\
+	udelay(BIT_IO_DELAY_INTERVAL);					\
+    }									\
+    else								\
+    {									\
+	unsigned int idx;						\
+	unsigned char wait;						\
+									\
+	WRPCI(HSMP_RspRegister	, SMU_IndexRegister);			\
+	WRPCI(MSG_RSP.value	, SMU_DataRegister);			\
+									\
+	for (idx = 0; idx < 8; idx++) { 				\
+		WRPCI(HSMP_ArgRegister + (idx << 2), SMU_IndexRegister);\
+		WRPCI(MSG_ARG[idx].value, SMU_DataRegister);		\
+	}								\
+	WRPCI(HSMP_CmdRegister	, SMU_IndexRegister);			\
+	WRPCI(MSG_ID.value	, SMU_DataRegister);			\
+									\
+	idx = BIT_IO_RETRIES_COUNT;					\
+	do {								\
+		WRPCI(HSMP_RspRegister	, SMU_IndexRegister);		\
+		RDPCI(MSG_RSP.value	, SMU_DataRegister);		\
+									\
+		idx--;							\
+		wait = (idx != 0) && (MSG_RSP.value == 0x0) ? 1 : 0;	\
+		if (wait == 1) {					\
+			udelay(BIT_IO_DELAY_INTERVAL);			\
+		}							\
+	} while (wait == 1);						\
+	if (idx == 0) { 						\
+		pr_warn("CoreFreq: AMD_HSMP_Mailbox(%x) Timeout\n",	\
+			MSG_FUNC);					\
+	}								\
+	else if (MSG_RSP.value == 0x1)					\
+	{								\
+	    for (idx = 0; idx < 8; idx++) {				\
+		WRPCI(HSMP_ArgRegister + (idx << 2), SMU_IndexRegister);\
+		RDPCI(MSG_ARG[idx].value, SMU_DataRegister);		\
+	    }								\
+	}								\
+	BIT_ATOM_UNLOCK(BUS_LOCK,					\
+			AMD_SMN_LOCK,					\
+			ATOMIC_SEED);					\
+    }									\
+	tries--;							\
+  } while ( (tries != 0) && (ret != 1) );				\
+  if (tries == 0) {							\
+	pr_warn("CoreFreq: AMD_HSMP_Mailbox(%x) TryLock\n", MSG_FUNC);	\
+  }									\
+	MSG_RSP.value;							\
+})
 
-	local.dword = 0;
-	SMU_Write(&local, RSP);
+#define IS_HSMP_OOO(_rx) (_rx == HSMP_UNSPECIFIED			\
+			|| (_rx >= HSMP_FAIL_BGN && _rx <= HSMP_FAIL_END))
 
-	for (idx = 0; idx < ARG_DIM; idx++) {
-		union DATA *pdata = data + idx;
-		unsigned int addr = ARG + (idx * sizeof(union DATA));
-		SMU_Write(pdata, addr);
-	}
+#define RESET_ARRAY(_array, _cnt, _val, ... )				\
+({									\
+	unsigned int rst;						\
+	for (rst = 0; rst < _cnt; rst++) {				\
+		_array[rst] __VA_ARGS__ = _val;				\
+	}								\
+})
 
-	local.dword = addr;
-	SMU_Write(&local, CMD);
+#define COPY_ARRAY(_dest, _source, _cnt, _d_mbr, _s_mbr)		\
+({									\
+	unsigned int idx;						\
+	for (idx = 0; idx < _cnt; idx++) {				\
+		_dest[idx] _d_mbr = _source[idx] _s_mbr;		\
+	}								\
+})
 
-	local.dword = 0;
-	tries = 0x7fff;
-	do {
-		SMU_Read(&local, RSP);
-		if (local.dword != 0) {
-			break;
-		}
-	} while (tries-- != 0);
-
-	if (tries > 0) {
-	    if (local.dword == SMU_OK) {
-		for (idx = 0; idx < ARG_DIM; idx++) {
-			union DATA *pdata = data + idx;
-			unsigned int addr = ARG + (idx * sizeof(union DATA));
-			SMU_Read(pdata, addr);
-		}
-	    }
-	}
-    }
-}
-
-void ZEN2_Read(union DATA *data, unsigned int addr)
+unsigned int AMD_HSMP_Exec(	enum HSMP_FUNC MSG_FUNC,
+				HSMP_ARG MSG_ARG[],
+				unsigned int HSMP_CmdRegister,
+				unsigned int HSMP_ArgRegister,
+				unsigned int HSMP_RspRegister,
+				unsigned int SMU_IndexRegister,
+				unsigned int SMU_DataRegister )
 {
-	SMU_MailBox(data, addr, CMD_MB_MTS, RSP_MB_MTS, ARG_MB_MTS);
+	return(AMD_HSMP_Mailbox(MSG_FUNC,
+				MSG_ARG,
+				HSMP_CmdRegister,
+				HSMP_ArgRegister,
+				HSMP_RspRegister,
+				SMU_IndexRegister,
+				SMU_DataRegister));
 }
-
-#define ZEN3_Read	ZEN2_Read
 
 void HSMP_Read(union DATA *data, unsigned int addr)
 {
-	SMU_MailBox(data, addr, CMD_MB_HSMP, RSP_MB_HSMP, ARG_MB_HSMP);
+	unsigned int rx;
+	enum HSMP_FUNC msg = (enum HSMP_FUNC) addr;
+	HSMP_ARG arg[ARG_DIM];
+	RESET_ARRAY(arg, ARG_DIM, 0, .value);
+
+	rx = AMD_HSMP_Exec(	msg, arg,
+				SMU_HSMP_F19H,
+				SMU_AMD_INDEX_REGISTER_F17H,
+				SMU_AMD_DATA_REGISTER_F17H );
+
+	if (rx == HSMP_RESULT_OK) {
+		COPY_ARRAY(data, arg, ARG_DIM, .dword, .value);
+	} else if (IS_HSMP_OOO(rx)) {
+		pr_warn("HSMP mailbox error code %u\n", rx);
+	}
 }
 
-/* <Ryzen SMU>: END */
+#define ZEN2_Read	HSMP_Read
+
+#define ZEN3_Read	HSMP_Read
 
 #define MAX_CHANNELS	8
 #define SMU_AMD_UMC_BASE_CHA_F17H( _bar, _cha )	( _bar + (_cha << 20) )
@@ -648,6 +834,7 @@ void Help_Usage(int rc, char *ctx)
 
 int main(int argc, char *argv[])
 {
+	BIT_ATOM_INIT(AMD_SMN_LOCK, ATOMIC_SEED);
 	int rc = 0;
     if (argc < 2) {
 	rc = 1;
@@ -729,7 +916,7 @@ int main(int argc, char *argv[])
 			|| (ic == HSMP))
 		    {
 			union DATA out[ARG_DIM] __attribute__ ((aligned (4)))={
-				0x0,0x0,0x0,0x0,0x0,0x0
+				0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0
 			};
 			unsigned int arg, idx;
 		      for (arg = 3, idx = 0;
@@ -745,11 +932,8 @@ int main(int argc, char *argv[])
 		      }
 		      if ((IC_Func[ic][READ] != NULL) && (rc == 0))
 		      {
-			printf( "[0x%08x] %s(%s) "			\
-				"INIT={0x%x,0x%x,0x%x,0x%x,0x%x,0x%x}\n",
-				addr, what[READ], component[ic],
-				out[0].dword, out[1].dword, out[2].dword,
-				out[3].dword, out[4].dword, out[5].dword );
+			printf( "[0x%08x] %s(%s)\n",
+				addr, what[READ], component[ic] );
 
 			IC_Func[ic][READ](out, addr);
 
