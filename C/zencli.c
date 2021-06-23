@@ -487,7 +487,7 @@ typedef union
 	WRPCI(HSMP_RspRegister	, SMU_IndexRegister);			\
 	WRPCI(MSG_RSP.value	, SMU_DataRegister);			\
 									\
-	for (idx = 0; idx < 8; idx++) { 				\
+	for (idx = 0; idx < ARG_DIM; idx++) {				\
 		WRPCI(HSMP_ArgRegister + (idx << 2), SMU_IndexRegister);\
 		WRPCI(MSG_ARG[idx].value, SMU_DataRegister);		\
 	}								\
@@ -511,7 +511,7 @@ typedef union
 	}								\
 	else if (MSG_RSP.value == 0x1)					\
 	{								\
-	    for (idx = 0; idx < 8; idx++) {				\
+	    for (idx = 0; idx < ARG_DIM; idx++) {			\
 		WRPCI(HSMP_ArgRegister + (idx << 2), SMU_IndexRegister);\
 		RDPCI(MSG_ARG[idx].value, SMU_DataRegister);		\
 	    }								\
@@ -915,7 +915,7 @@ int main(int argc, char *argv[])
 			|| (ic == ZEN3)
 			|| (ic == HSMP))
 		    {
-			union DATA out[ARG_DIM] __attribute__ ((aligned (4)))={
+			union DATA out[ARG_DIM] = {
 				0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0
 			};
 			unsigned int arg, idx;
@@ -989,4 +989,3 @@ int main(int argc, char *argv[])
     }
 	return (rc);
 }
-
