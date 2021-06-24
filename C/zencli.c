@@ -586,7 +586,8 @@ void HSMP_Read(union DATA *data, unsigned int addr)
 	unsigned int rx;
 	enum HSMP_FUNC msg = (enum HSMP_FUNC) addr;
 	HSMP_ARG arg[ARG_DIM];
-	RESET_ARRAY(arg, ARG_DIM, 0, .value);
+
+	COPY_ARRAY(arg, data, ARG_DIM, .value, .dword);
 
 	rx = AMD_HSMP_Exec(	msg, arg,
 				SMU_HSMP_REGISTERS,
@@ -932,10 +933,10 @@ int main(int argc, char *argv[])
 			|| (ic == ZEN3)
 			|| (ic == HSMP))
 		    {
-			union DATA out[ARG_DIM] = {
-				0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0
-			};
+			union DATA out[ARG_DIM];
 			unsigned int arg, idx;
+
+			RESET_ARRAY(out, ARG_DIM, 0, .dword);
 		      for (arg = 3, idx = 0;
 				arg < argc && idx < ARG_DIM;
 					arg++, idx++)
