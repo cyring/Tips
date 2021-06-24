@@ -6,6 +6,11 @@
  *
  * - Build Instructions -
  *	cc zencli.c -o zencli
+ *   with HSMP registers as options
+ *	cc zencli.c -o zencli \
+ *	-DHSMP_CMD_REG=0x3B10524 \
+ *	-DHSMP_ARG_REG=0x3B10A40 \
+ *	-DHSMP_RSP_REG=0x3B10570
  */
 
 #define _GNU_SOURCE
@@ -414,7 +419,19 @@ void PM2_Write(union DATA *data, unsigned int addr)
 }
 
 /* Sources: PPR Vol 2 for AMD Family 19h Model 01h B1			*/
-#define SMU_HSMP_F19H	/*Cmd:*/0x3b10534, /*Arg:*/0x3b109e0, /*Rsp:*/0x3b10980
+#ifndef HSMP_CMD_REG
+	#define HSMP_CMD_REG 0x3b10534
+#endif
+#ifndef HSMP_ARG_REG
+	#define HSMP_ARG_REG 0x3b109e0
+#endif
+#ifndef HSMP_RSP_REG
+	#define HSMP_RSP_REG 0x3b10980
+#endif
+
+#define SMU_HSMP_REGISTERS	/*Cmd:*/HSMP_CMD_REG,	\
+				/*Arg:*/HSMP_ARG_REG,	\
+				/*Rsp:*/HSMP_RSP_REG
 
 enum HSMP_FUNC {
 	HSMP_TEST_MSG	= 0x1,	/* Returns [ARG0] + 1			*/
@@ -572,7 +589,7 @@ void HSMP_Read(union DATA *data, unsigned int addr)
 	RESET_ARRAY(arg, ARG_DIM, 0, .value);
 
 	rx = AMD_HSMP_Exec(	msg, arg,
-				SMU_HSMP_F19H,
+				SMU_HSMP_REGISTERS,
 				SMU_AMD_INDEX_REGISTER_F17H,
 				SMU_AMD_DATA_REGISTER_F17H );
 
