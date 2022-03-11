@@ -385,7 +385,7 @@ void SMU_Write(union DATA *data, unsigned int addr)
 	printf("SMU_Write (%08x, %08x)\n",addr, data->dword);
 #endif
 	WRPCI(addr, SMU_AMD_INDEX_REGISTER_ALT_F17H);
-	WRPCI(SMU_AMD_DATA_REGISTER_ALT_F17H, data->dword);
+	WRPCI(data->dword, SMU_AMD_DATA_REGISTER_ALT_F17H);
 }
 
 void FCH_Read(union DATA *data, unsigned int addr)
