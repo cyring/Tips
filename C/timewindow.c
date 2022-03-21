@@ -7,12 +7,12 @@
 
 double TW_Optimize(unsigned short Y, unsigned short Z, double TU)
 {
-	return (1 << Y) * ((4 + Z) >> 2) * TU;
+	return (((1 << Y) * (4 + Z)) >> 2) * TU;
 }
 
 double TW_Manufacturer(unsigned short Y, unsigned short Z, double TU)
 {
-	return (1 << Y) * (1 + Z/4) * TU;
+	return (1 << Y) * (1.0 + Z / 4.0) * TU;
 }
 
 int main(int argc, char *argv[])
