@@ -7,12 +7,7 @@
 
 double TW_Optimize(unsigned short Y, unsigned short Z, double TU)
 {
-	unsigned long long duration;
-	duration = (1 << Y);
-	duration *= (4 + Z);
-	duration = duration >> 2;
-
-	return TU * (double)duration;
+	return (1 << Y) * ((4 + Z) >> 2) * TU;
 }
 
 double TW_Manufacturer(unsigned short Y, unsigned short Z, double TU)
