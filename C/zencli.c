@@ -1,7 +1,7 @@
 /*
  * zencli.c by CyrIng
  *
- * Copyright (C) 2020-2021 CYRIL INGENIERIE
+ * Copyright (C) 2020-2022 CYRIL INGENIERIE
  * Licenses: GPL2
  *
  * - Build Instructions -
@@ -374,16 +374,10 @@ void SMU_Read(union DATA *data, unsigned int addr)
 {
 	WRPCI(addr, SMU_AMD_INDEX_REGISTER_ALT_F17H);
 	RDPCI(data->dword, SMU_AMD_DATA_REGISTER_ALT_F17H);
-#if DEBUG == 1
-	printf(" SMU_Read (%08x, %08x)\n",addr, data->dword);
-#endif
 }
 
 void SMU_Write(union DATA *data, unsigned int addr)
 {
-#if DEBUG == 1
-	printf("SMU_Write (%08x, %08x)\n",addr, data->dword);
-#endif
 	WRPCI(addr, SMU_AMD_INDEX_REGISTER_ALT_F17H);
 	WRPCI(data->dword, SMU_AMD_DATA_REGISTER_ALT_F17H);
 }
