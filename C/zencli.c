@@ -21,6 +21,78 @@
 #include <sys/types.h>
 #include <time.h>
 
+typedef struct
+{
+	unsigned int
+	Stepping	:  4-0,
+	Model		:  8-4,
+	Family		: 12-8,
+	ProcType	: 14-12,
+	Reserved1	: 16-14,
+	ExtModel	: 20-16,
+	ExtFamily	: 28-20,
+	Reserved2	: 32-28;
+} SIGNATURE;
+
+#define _AMD_Zen	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x0, .Model=0x1}
+#define _AMD_Zen_APU	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x1, .Model=0x1}
+#define _AMD_ZenPlus	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x0, .Model=0x8}
+#define _AMD_ZenPlus_APU {.ExtFamily=0x8,.Family=0xF, .ExtModel=0x1, .Model=0x8}
+#define _AMD_Zen_Dali	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x2, .Model=0x0}
+#define _AMD_EPYC_Rome_CPK	\
+			{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x3, .Model=0x1}
+
+#define _AMD_Zen2_Renoir {.ExtFamily=0x8,.Family=0xF, .ExtModel=0x6, .Model=0x0}
+#define _AMD_Zen2_LCN	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x6, .Model=0x8}
+#define _AMD_Zen2_MTS	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x7, .Model=0x1}
+#define _AMD_Zen2_Ariel {.ExtFamily=0x8, .Family=0xF, .ExtModel=0x7, .Model=0x4}
+
+#define _AMD_Zen2_Jupiter	\
+			{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x9, .Model=0x0}
+
+#define _AMD_Zen2_Galileo	\
+			{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x9, .Model=0x1}
+
+#define _AMD_Zen2_MDN	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0xA, .Model=0x0}
+
+#define _AMD_Family_17h {.ExtFamily=0x8, .Family=0xF, .ExtModel=0x0, .Model=0x0}
+#define _Hygon_Family_18h	\
+			{.ExtFamily=0x9, .Family=0xF, .ExtModel=0x0, .Model=0x0}
+
+#define _AMD_Family_19h {.ExtFamily=0xA, .Family=0xF, .ExtModel=0x0, .Model=0x0}
+#define _AMD_Zen3_VMR	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x2, .Model=0x1}
+#define _AMD_Zen3_CZN	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x5, .Model=0x0}
+#define _AMD_EPYC_Milan {.ExtFamily=0xA, .Family=0xF, .ExtModel=0x0, .Model=0x1}
+#define _AMD_Zen3_Chagall	\
+			{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x0, .Model=0x8}
+#define _AMD_Zen3_Badami	\
+			{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x3, .Model=0x0}
+#define _AMD_Zen3Plus_RMB	\
+			{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x4, .Model=0x4}
+
+#define _AMD_Zen4_Genoa {.ExtFamily=0xA, .Family=0xF, .ExtModel=0x1, .Model=0x1}
+#define _AMD_Zen4_RPL	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x6, .Model=0x1}
+#define _AMD_Zen4_PHX	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x7, .Model=0x4}
+#define _AMD_Zen4_PHXR	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x7, .Model=0x5}
+#define _AMD_Zen4_PHX2	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x7, .Model=0x8}
+#define _AMD_Zen4_HWK	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x7, .Model=0xC}
+#define _AMD_Zen4_Bergamo	\
+			{.ExtFamily=0xA, .Family=0xF, .ExtModel=0xa, .Model=0x0}
+
+#define _AMD_Zen4_STP	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x1, .Model=0x8}
+
+#define _AMD_Family_1Ah {.ExtFamily=0xB, .Family=0xF, .ExtModel=0x0, .Model=0x0}
+#define _AMD_Zen5_STX	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x2, .Model=0x4}
+#define _AMD_Zen5_Eldora	\
+			{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x4, .Model=0x4}
+
+#define _AMD_Zen5_Turin {.ExtFamily=0xB, .Family=0xF, .ExtModel=0x0, .Model=0x2}
+#define _AMD_Zen5_Turin_Dense	\
+			{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x1, .Model=0x1}
+
+#define _AMD_Zen5_KRK	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x6, .Model=0x0}
+#define _AMD_Zen5_STXH	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x7, .Model=0x0}
+
 typedef unsigned long long int	Bit64;
 
 #define LOCKLESS " "
@@ -599,16 +671,17 @@ void HSMP_Read(union DATA *data, unsigned int addr)
 
 #define ZEN3_Read	HSMP_Read
 
-#define MAX_CHANNELS	8
+#define MAX_CHANNELS	12
 #define SMU_AMD_UMC_BASE_CHA_F17H( _bar, _cha )	( _bar + (_cha << 20) )
 
-void UMC_Read(union DATA *data, unsigned int _addr)
+void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
+			union DATA *data, unsigned int _addr )
 {
 	unsigned int addr = _addr == 0x0 ? 0x00050000 : _addr;
-	unsigned int UMC_BAR[MAX_CHANNELS] = { 0,0,0,0,0,0,0,0 };
+	unsigned int UMC_BAR[MAX_CHANNELS] = { 0,0,0,0,0,0,0,0,0,0,0,0 };
 	unsigned short ChannelCount = 0, cha, chip, sec;
 
-	printf("\nData Fabric: scanning UMC @ BAR[0x%08x] : ", addr);
+	printf("\nData Fabric:\tscanning UMC @ BAR[0x%08x] : ", addr);
     for (cha = 0; cha < MAX_CHANNELS; cha++)
     {
 	union DATA SdpCtrl = {.dword = 0};
@@ -621,7 +694,7 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 	}
 	printf("%u ", cha);
     }
-	printf("for %u Channels\n\n", ChannelCount);
+	printf("\n\t\tfor %u detected channels\n\n", ChannelCount);
 
     for (cha = 0; cha < ChannelCount; cha++)
     {
@@ -629,12 +702,12 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 
 	const unsigned int CHIP_BAR[2][2] = {
 	[0] =	{
-		[0] = UMC_BAR[cha] + 0x0,
-		[1] = UMC_BAR[cha] + 0x20
+		[0] = UMC_BAR[cha] + CHIP_OFFSET[0][0],
+		[1] = UMC_BAR[cha] + CHIP_OFFSET[0][1]
 		},
 	[1] =	{
-		[0] = UMC_BAR[cha] + 0x10,
-		[1] = UMC_BAR[cha] + 0x28
+		[0] = UMC_BAR[cha] + CHIP_OFFSET[1][0],
+		[1] = UMC_BAR[cha] + CHIP_OFFSET[1][1]
 		}
 	};
 	for (chip = 0; chip < 4; chip++)
@@ -700,6 +773,150 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 	}
 	printf( "\nDIMM Size[%llu KB] [%llu MB]\n\n",
 		DIMM_Size, (DIMM_Size >> 10) );
+    }
+}
+
+void UMC_Read_MTS(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x28}
+			},
+			data, _addr );
+}
+
+void UMC_Read_VMR(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x28}
+			},
+			data, _addr );
+}
+
+void UMC_Read_CZN(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x28}
+			},
+			data, _addr );
+}
+
+void UMC_Read_RMB(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x30}
+			},
+			data, _addr );
+}
+
+void UMC_Read_RPL(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x30}
+			},
+			data, _addr );
+}
+
+void UMC_Read_Genoa(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x30}
+			},
+			data, _addr );
+}
+
+void UMC_Read_PHX(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x30}
+			},
+			data, _addr );
+}
+
+void UMC_Read(union DATA *data, unsigned int _addr)
+{
+	struct {
+		SIGNATURE Signature;
+		void (*Call)(union DATA*, unsigned int);
+	} Arch[] = {
+		{ _AMD_Zen		,	NULL },
+		{ _AMD_Zen_APU		,	NULL },
+		{ _AMD_ZenPlus		,	NULL },
+		{ _AMD_ZenPlus_APU	,	NULL },
+		{ _AMD_Zen_Dali 	,	NULL },
+		{ _AMD_EPYC_Rome_CPK	,	NULL },
+		{ _AMD_Zen2_Renoir	,	NULL },
+		{ _AMD_Zen2_LCN 	,	NULL },
+		{ _AMD_Zen2_MTS 	,	UMC_Read_MTS	},
+		{ _AMD_Zen2_Ariel	,	NULL },
+		{ _AMD_Zen2_Jupiter	,	NULL },
+		{ _AMD_Zen2_Galileo	,	NULL },
+		{ _AMD_Zen2_MDN 	,	NULL },
+		{ _AMD_Family_17h	,	NULL },
+		{ _Hygon_Family_18h	,	NULL },
+		{ _AMD_Family_19h	,	NULL },
+		{ _AMD_Zen3_VMR 	,	UMC_Read_VMR	},
+		{ _AMD_Zen3_CZN 	,	UMC_Read_CZN	},
+		{ _AMD_EPYC_Milan	,	NULL },
+		{ _AMD_Zen3_Chagall	,	NULL },
+		{ _AMD_Zen3_Badami	,	NULL },
+		{ _AMD_Zen3Plus_RMB	,	UMC_Read_RMB	},
+		{ _AMD_Zen4_Genoa	,	UMC_Read_Genoa	},
+		{ _AMD_Zen4_RPL 	,	UMC_Read_RPL	},
+		{ _AMD_Zen4_PHX 	,	UMC_Read_PHX	},
+		{ _AMD_Zen4_PHXR	,	UMC_Read_PHX	},
+		{ _AMD_Zen4_PHX2	,	NULL },
+		{ _AMD_Zen4_HWK 	,	NULL },
+		{ _AMD_Zen4_Bergamo	,	NULL },
+		{ _AMD_Zen4_STP 	,	NULL },
+		{ _AMD_Family_1Ah	,	NULL },
+		{ _AMD_Zen5_STX 	,	NULL },
+		{ _AMD_Zen5_Eldora	,	NULL },
+		{ _AMD_Zen5_Turin	,	NULL },
+		{ _AMD_Zen5_Turin_Dense ,	NULL },
+		{ _AMD_Zen5_KRK 	,	NULL },
+		{ _AMD_Zen5_STXH	,	NULL }
+	};
+	SIGNATURE EAX = {0x0};
+	unsigned int EBX = 0x0, ECX = 0x0, EDX = 0x0, id;
+
+	__asm__ volatile
+	(
+		"movq	$0x1,  %%rax	\n\t"
+		"xorq	%%rbx, %%rbx	\n\t"
+		"xorq	%%rcx, %%rcx	\n\t"
+		"xorq	%%rdx, %%rdx	\n\t"
+		"cpuid			\n\t"
+		"mov	%%eax, %0	\n\t"
+		"mov	%%ebx, %1	\n\t"
+		"mov	%%ecx, %2	\n\t"
+		"mov	%%edx, %3"
+		: "=r" (EAX),
+		  "=r" (EBX),
+		  "=r" (ECX),
+		  "=r" (EDX)
+		:
+		: "%rax", "%rbx", "%rcx", "%rdx"
+	);
+
+    for (id = 0; id < sizeof(Arch) / sizeof(Arch[0]); id++)
+    {	/* Search for an architecture signature. */
+	if ( (EAX.ExtFamily == Arch[id].Signature.ExtFamily)
+	  && (EAX.Family == Arch[id].Signature.Family)
+	  && (EAX.ExtModel ==  Arch[id].Signature.ExtModel)
+	  && (EAX.Model == Arch[id].Signature.Model) )
+	{
+		if (Arch[id].Call != NULL) {
+			Arch[id].Call(data, _addr);
+		}
+		break;
+	}
     }
 }
 
@@ -827,7 +1044,7 @@ void Help_Usage(int rc, char *ctx)
 		break;
 	case 3:
 		printf("Syntax: Invalid Hexadecimal Address or Data value\n" \
-			"\tExpected  <addr> and <data> like 0x1a2b3c4d\n"	\
+			"\tExpected  <addr> and <data> like 0x1a2b3c4d\n" \
 			"\tOr"					\
 			"\t  <addr> like bus:0x1-dev:0x2-fn:0x3-reg:0xff\n");
 		break;
@@ -883,7 +1100,8 @@ int main(int argc, char *argv[])
 	      if (1 != sscanf(argv[2], "0x%x%c", &addr, &tr))
 	      {
 		unsigned char _bus, _dev, _fn, _reg;
-		if (4 != sscanf(argv[2], "bus:0x%x-dev:0x%x-fn:0x%x-reg:0x%x%c",
+		if (4 != sscanf(argv[2],
+				"bus:0x%hhx-dev:0x%hhx-fn:0x%hhx-reg:0x%hhx%c",
 				&_bus, &_dev, &_fn, &_reg, &tr))
 		{
 			rc = 3;
