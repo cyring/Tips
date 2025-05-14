@@ -776,6 +776,15 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
     }
 }
 
+void UMC_Read_Renoir(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x28}
+			},
+			data, _addr );
+}
+
 void UMC_Read_MTS(union DATA *data, unsigned int _addr)
 {
 	UMC_Read_Exec(	(const unsigned int[2][2]) {
@@ -851,8 +860,8 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 		{ _AMD_ZenPlus_APU	,	NULL },
 		{ _AMD_Zen_Dali 	,	NULL },
 		{ _AMD_EPYC_Rome_CPK	,	NULL },
-		{ _AMD_Zen2_Renoir	,	NULL },
-		{ _AMD_Zen2_LCN 	,	NULL },
+		{ _AMD_Zen2_Renoir	,	UMC_Read_Renoir },
+		{ _AMD_Zen2_LCN 	,	UMC_Read_Renoir },
 		{ _AMD_Zen2_MTS 	,	UMC_Read_MTS	},
 		{ _AMD_Zen2_Ariel	,	NULL },
 		{ _AMD_Zen2_Jupiter	,	NULL },
