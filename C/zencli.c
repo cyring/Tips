@@ -34,7 +34,9 @@ typedef struct
 	Reserved2	: 32-28;
 } SIGNATURE;
 
-#define _AMD_Zen	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x0, .Model=0x1}
+#define _AMD_Zen_SummitRidge	\
+			{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x0, .Model=0x1}
+
 #define _AMD_Zen_APU	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x1, .Model=0x1}
 #define _AMD_ZenPlus	{.ExtFamily=0x8, .Family=0xF, .ExtModel=0x0, .Model=0x8}
 #define _AMD_ZenPlus_APU {.ExtFamily=0x8,.Family=0xF, .ExtModel=0x1, .Model=0x8}
@@ -92,6 +94,7 @@ typedef struct
 
 #define _AMD_Zen5_KRK	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x6, .Model=0x0}
 #define _AMD_Zen5_STXH	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x7, .Model=0x0}
+#define _AMD_Zen5_SHP	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x0, .Model=0x8}
 
 typedef unsigned long long int	Bit64;
 
@@ -748,7 +751,7 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 				"bsrl	%[base], %%ecx" 	"\n\t"
 				"jz	1f"			"\n\t"
 				"incl	%%edx"			"\n\t"
-				"shll	%%ecx, %%edx"	 	"\n\t"
+				"shll	%%cl, %%edx"		"\n\t"
 				"negl	%%edx"			"\n\t"
 				"notl	%%edx"			"\n\t"
 				"andl	$0xfffffffe, %%edx"	"\n\t"
@@ -758,7 +761,7 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 				"movl	%%edx, %[dest]"
 				: [dest] "=m" (chipSize)
 				: [base] "m"  (MaskReg.dword)
-				: "cc", "memory", "%ecx", "%edx"
+				: "cc", "memory", "ecx", "edx"
 			);
 
 			DIMM_Size += chipSize;
@@ -776,6 +779,15 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
     }
 }
 
+void UMC_Read_Zeppelin(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x28}
+			},
+			data, _addr );
+}
+
 void UMC_Read_Renoir(union DATA *data, unsigned int _addr)
 {
 	UMC_Read_Exec(	(const unsigned int[2][2]) {
@@ -786,6 +798,15 @@ void UMC_Read_Renoir(union DATA *data, unsigned int _addr)
 }
 
 void UMC_Read_MTS(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x28}
+			},
+			data, _addr );
+}
+
+void UMC_Read_VGH(union DATA *data, unsigned int _addr)
 {
 	UMC_Read_Exec(	(const unsigned int[2][2]) {
 				{ 0x0, 0x20},
@@ -848,49 +869,59 @@ void UMC_Read_PHX(union DATA *data, unsigned int _addr)
 			data, _addr );
 }
 
+void UMC_Read_Zen5(union DATA *data, unsigned int _addr)
+{
+	UMC_Read_Exec(	(const unsigned int[2][2]) {
+				{ 0x0, 0x20},
+				{0x10, 0x30}
+			},
+			data, _addr );
+}
+
 void UMC_Read(union DATA *data, unsigned int _addr)
 {
 	struct {
 		SIGNATURE Signature;
 		void (*Call)(union DATA*, unsigned int);
 	} Arch[] = {
-		{ _AMD_Zen		,	NULL },
-		{ _AMD_Zen_APU		,	NULL },
-		{ _AMD_ZenPlus		,	NULL },
-		{ _AMD_ZenPlus_APU	,	NULL },
-		{ _AMD_Zen_Dali 	,	NULL },
-		{ _AMD_EPYC_Rome_CPK	,	NULL },
+		{ _AMD_Zen_SummitRidge	,	UMC_Read_Zeppelin },
+		{ _AMD_Zen_APU		,	UMC_Read_Zeppelin },
+		{ _AMD_ZenPlus		,	UMC_Read_Zeppelin },
+		{ _AMD_ZenPlus_APU	,	UMC_Read_Zeppelin },
+		{ _AMD_Zen_Dali 	,	UMC_Read_Zeppelin },
+		{ _AMD_EPYC_Rome_CPK	,	UMC_Read_MTS	},
 		{ _AMD_Zen2_Renoir	,	UMC_Read_Renoir },
 		{ _AMD_Zen2_LCN 	,	UMC_Read_Renoir },
 		{ _AMD_Zen2_MTS 	,	UMC_Read_MTS	},
-		{ _AMD_Zen2_Ariel	,	NULL },
-		{ _AMD_Zen2_Jupiter	,	NULL },
-		{ _AMD_Zen2_Galileo	,	NULL },
-		{ _AMD_Zen2_MDN 	,	NULL },
-		{ _AMD_Family_17h	,	NULL },
-		{ _Hygon_Family_18h	,	NULL },
-		{ _AMD_Family_19h	,	NULL },
+		{ _AMD_Zen2_Ariel	,	UMC_Read_MTS	},
+		{ _AMD_Zen2_Jupiter	,	UMC_Read_VGH	},
+		{ _AMD_Zen2_Galileo	,	UMC_Read_VGH	},
+		{ _AMD_Zen2_MDN 	,	UMC_Read_VGH	},
 		{ _AMD_Zen3_VMR 	,	UMC_Read_VMR	},
 		{ _AMD_Zen3_CZN 	,	UMC_Read_CZN	},
-		{ _AMD_EPYC_Milan	,	NULL },
-		{ _AMD_Zen3_Chagall	,	NULL },
-		{ _AMD_Zen3_Badami	,	NULL },
+		{ _AMD_EPYC_Milan	,	UMC_Read_VMR	},
+		{ _AMD_Zen3_Chagall	,	UMC_Read_VMR	},
+		{ _AMD_Zen3_Badami	,	UMC_Read_VMR	},
 		{ _AMD_Zen3Plus_RMB	,	UMC_Read_RMB	},
 		{ _AMD_Zen4_Genoa	,	UMC_Read_Genoa	},
 		{ _AMD_Zen4_RPL 	,	UMC_Read_RPL	},
 		{ _AMD_Zen4_PHX 	,	UMC_Read_PHX	},
 		{ _AMD_Zen4_PHXR	,	UMC_Read_PHX	},
-		{ _AMD_Zen4_PHX2	,	NULL },
-		{ _AMD_Zen4_HWK 	,	NULL },
-		{ _AMD_Zen4_Bergamo	,	NULL },
-		{ _AMD_Zen4_STP 	,	NULL },
-		{ _AMD_Family_1Ah	,	NULL },
-		{ _AMD_Zen5_STX 	,	NULL },
-		{ _AMD_Zen5_Eldora	,	NULL },
-		{ _AMD_Zen5_Turin	,	NULL },
-		{ _AMD_Zen5_Turin_Dense ,	NULL },
-		{ _AMD_Zen5_KRK 	,	NULL },
-		{ _AMD_Zen5_STXH	,	NULL }
+		{ _AMD_Zen4_PHX2	,	UMC_Read_PHX	},
+		{ _AMD_Zen4_HWK 	,	UMC_Read_PHX	},
+		{ _AMD_Zen4_Bergamo	,	UMC_Read_VMR	},
+		{ _AMD_Zen4_STP 	,	UMC_Read_VMR	},
+		{ _AMD_Zen5_STX 	,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_Eldora	,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_Turin	,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_Turin_Dense ,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_KRK 	,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_STXH	,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_SHP 	,	UMC_Read_Zen5	},
+		{ _AMD_Family_17h	,	UMC_Read_Zeppelin },
+		{ _Hygon_Family_18h	,	UMC_Read_Zeppelin },
+		{ _AMD_Family_19h	,	UMC_Read_VMR	},
+		{ _AMD_Family_1Ah	,	UMC_Read_Zen5	}
 	};
 	SIGNATURE EAX = {0x0};
 	unsigned int EBX = 0x0, ECX = 0x0, EDX = 0x0, id;
