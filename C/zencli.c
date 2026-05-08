@@ -1,16 +1,24 @@
 /*
  * zencli.c by CyrIng
  *
- * Copyright (C) 2020-2022 CYRIL INGENIERIE
+ * Copyright (C) 2020-2026 CYRIL INGENIERIE
  * Licenses: GPL2
  *
  * - Build Instructions -
  *	cc zencli.c -o zencli
  *   with HSMP registers as options
  *	cc zencli.c -o zencli \
- *	-DHSMP_CMD_REG=0x3B10524 \
- *	-DHSMP_ARG_REG=0x3B10A40 \
- *	-DHSMP_RSP_REG=0x3B10570
+ *	-D HSMP_CMD_REG=0x3B10524 \
+ *	-D HSMP_ARG_REG=0x3B10A40 \
+ *	-D HSMP_RSP_REG=0x3B10570
+ *   for family 19h model 01h B1
+ *	cc zencli.c -o zencli \
+ *	-D HSMP_CMD_REG=0x3B10534
+ *	-D HSMP_ARG_REG=0x3B109E0
+ *	-D HSMP_RSP_REG=0x3B10980
+ *   for family 1Ah
+ *	cc zencli.c -o zencli \
+ *	-D HSMP_CMD_REG=0x3B10934
  */
 
 #define _GNU_SOURCE
@@ -84,6 +92,9 @@ typedef struct
 #define _AMD_Zen4_STP	{.ExtFamily=0xA, .Family=0xF, .ExtModel=0x1, .Model=0x8}
 
 #define _AMD_Family_1Ah {.ExtFamily=0xB, .Family=0xF, .ExtModel=0x0, .Model=0x0}
+#define _AMD_Family_1Ah_01h	\
+			{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x0, .Model=0x1}
+
 #define _AMD_Zen5_STX	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x2, .Model=0x4}
 #define _AMD_Zen5_Eldora	\
 			{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x4, .Model=0x4}
@@ -93,6 +104,7 @@ typedef struct
 			{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x1, .Model=0x1}
 
 #define _AMD_Zen5_KRK	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x6, .Model=0x0}
+#define _AMD_Zen5_GRP	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x6, .Model=0x8}
 #define _AMD_Zen5_STXH	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x7, .Model=0x0}
 #define _AMD_Zen5_SHP	{.ExtFamily=0xB, .Family=0xF, .ExtModel=0x0, .Model=0x8}
 
@@ -916,12 +928,14 @@ void UMC_Read(union DATA *data, unsigned int _addr)
 		{ _AMD_Zen5_Turin	,	UMC_Read_Zen5	},
 		{ _AMD_Zen5_Turin_Dense ,	UMC_Read_Zen5	},
 		{ _AMD_Zen5_KRK 	,	UMC_Read_Zen5	},
+		{ _AMD_Zen5_GRP 	,	UMC_Read_Zen5	},
 		{ _AMD_Zen5_STXH	,	UMC_Read_Zen5	},
 		{ _AMD_Zen5_SHP 	,	UMC_Read_Zen5	},
 		{ _AMD_Family_17h	,	UMC_Read_Zeppelin },
 		{ _Hygon_Family_18h	,	UMC_Read_Zeppelin },
 		{ _AMD_Family_19h	,	UMC_Read_VMR	},
-		{ _AMD_Family_1Ah	,	UMC_Read_Zen5	}
+		{ _AMD_Family_1Ah	,	UMC_Read_Zen5	},
+		{ _AMD_Family_1Ah_01h	,	UMC_Read_Zen5	}
 	};
 	SIGNATURE EAX = {0x0};
 	unsigned int EBX = 0x0, ECX = 0x0, EDX = 0x0, id;
