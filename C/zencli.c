@@ -694,7 +694,9 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 {
 	unsigned int addr = _addr == 0x0 ? 0x00050000 : _addr;
 	unsigned int UMC_BAR[MAX_CHANNELS] = { 0,0,0,0,0,0,0,0,0,0,0,0 };
+	unsigned short SDP[MAX_CHANNELS] = { 0,0,0,0,0,0,0,0,0,0,0,0 };
 	unsigned short ChannelCount = 0, cha, chip, sec;
+	const unsigned shared_mask = CHIP_OFFSET[1][1] - CHIP_OFFSET[0][1] <= 0x8;
 
 	printf("\nData Fabric:\tscanning UMC @ BAR[0x%08x] : ", addr);
     for (cha = 0; cha < MAX_CHANNELS; cha++)
@@ -703,16 +705,19 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 
 	SMU_Read(&SdpCtrl, SMU_AMD_UMC_BASE_CHA_F17H(addr, cha) + 0x104);
 
-	if ((SdpCtrl.dword != 0xffffffff) && (BITVAL(SdpCtrl.dword, 31)))
-	{
-		UMC_BAR[ChannelCount++] = SMU_AMD_UMC_BASE_CHA_F17H(addr, cha);
+	if ((SdpCtrl.dword != 0xffffffff)
+	&& (1 == (SDP[cha] = BITVAL(SdpCtrl.dword, 31))))
+	{	/*		SdpInit: Channel is validated		*/
+		UMC_BAR[cha] = SMU_AMD_UMC_BASE_CHA_F17H(addr, cha);
+		ChannelCount++;
 	}
 	printf("%u ", cha);
     }
 	printf("\n\t\tfor %u detected channels\n\n", ChannelCount);
 
-    for (cha = 0; cha < ChannelCount; cha++)
-    {
+    for (cha = 0; cha < MAX_CHANNELS; cha++)
+      if (SDP[cha])
+      {
 	unsigned long long DIMM_Size = 0;
 
 	const unsigned int CHIP_BAR[2][2] = {
@@ -725,34 +730,34 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 		[1] = UMC_BAR[cha] + CHIP_OFFSET[1][1]
 		}
 	};
+	unsigned short ranks = 0;
 	for (chip = 0; chip < 4; chip++)
 	{
 	    for (sec = 0; sec < 2; sec++)
 	    {
 		union DATA ChipReg, MaskReg;
-		unsigned int addr[2], state, rank = 0;
+		unsigned int addr[2];
+		unsigned short CS;
 
-		addr[1] = CHIP_BAR[sec][1] + 4 * (chip >> 1);
-
+		if (shared_mask) {
+			addr[1] = CHIP_BAR[sec][1] + ((chip >> 1) << 2);
+		} else {
+			addr[1] = CHIP_BAR[sec][1] + (chip << 2);
+		}
 		SMU_Read(&MaskReg, addr[1]);
 
-		if ((rank == 0) && (MaskReg.dword != 0)) {
-			rank = BITVAL(MaskReg.dword, 9) ? 1 : 2;
-		}
-		if (rank == 2) {
-			addr[0] = CHIP_BAR[sec][0] + 4 * chip;
-		} else {
-			addr[0] = CHIP_BAR[sec][0] + 4 * (chip - (chip > 2));
-		}
+		addr[0] = CHIP_BAR[sec][0] + (chip << 2);
+
 		SMU_Read(&ChipReg, addr[0]);
 
-		state = BITVAL(ChipReg.dword, 0);
+		CS = BITVAL(ChipReg.dword, 0);
+		ranks = ranks + CS;
 
-		printf("CHA[%u] CHIP[%u:%u] @ 0x%08x[0x%08x] %sable, Rank=%u\n",
+		printf("CHA[%u] CHIP[%u:%u] @ 0x%08x[0x%08x] %sable, %u Rank(s)\n",
 			cha, chip, sec, addr[0], ChipReg.dword,
-			state ? "En":"Dis", rank);
+			CS ? "En":"Dis", ranks);
 
-		if (state)
+		if (CS)
 		{
 			unsigned int chipSize;
 
@@ -788,7 +793,7 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 	}
 	printf( "\nDIMM Size[%llu KB] [%llu MB]\n\n",
 		DIMM_Size, (DIMM_Size >> 10) );
-    }
+      }
 }
 
 void UMC_Read_Zeppelin(union DATA *data, unsigned int _addr)
