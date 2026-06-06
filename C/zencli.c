@@ -737,7 +737,7 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 		[1] = UMC_BAR[cha] + CHIP_OFFSET[1][1]
 		}
 	};
-	unsigned short DPC[2] = {0, 0};
+	unsigned short DPC[2] = {0, 0}, has_secondary = 0;
 	for (chip = 0; chip < 4; chip++)
 	{
 	    for (sec = 0; sec < 2; sec++)
@@ -765,42 +765,46 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 			cha, chip, sec, addr[0], ChipReg.dword,
 			CS ? "En":"Dis", DPC[chip >> 1]);
 
-		if (CS)
-		{
-			unsigned int chipSize;
+	      if (CS)
+	      {
+		unsigned int chipSize;
 
-			__asm__ volatile
-			(
-			"DECODER:"				"\n\t"
-				"xorl	%%edx, %%edx"		"\n\t"
-				"bsrl	%[base], %%ecx" 	"\n\t"
-				"jz	1f"			"\n\t"
-				"incl	%%edx"			"\n\t"
-				"shll	%%cl, %%edx"		"\n\t"
-				"negl	%%edx"			"\n\t"
-				"notl	%%edx"			"\n\t"
-				"andl	$0xfffffffe, %%edx"	"\n\t"
-				"shrl	$2, %%edx"		"\n\t"
-				"incl	%%edx"			"\n\t"
-			"1:"					"\n\t"
-				"movl	%%edx, %[dest]"
-				: [dest] "=m" (chipSize)
-				: [base] "m"  (MaskReg.dword)
-				: "cc", "memory", "ecx", "edx"
-			);
+		__asm__ volatile
+		(
+		"DECODER:"				"\n\t"
+			"xorl	%%edx, %%edx"		"\n\t"
+			"bsrl	%[base], %%ecx" 	"\n\t"
+			"jz	1f"			"\n\t"
+			"incl	%%edx"			"\n\t"
+			"shll	%%cl, %%edx"		"\n\t"
+			"negl	%%edx"			"\n\t"
+			"notl	%%edx"			"\n\t"
+			"andl	$0xfffffffe, %%edx"	"\n\t"
+			"shrl	$2, %%edx"		"\n\t"
+			"incl	%%edx"			"\n\t"
+		"1:"					"\n\t"
+			"movl	%%edx, %[dest]"
+			: [dest] "=m" (chipSize)
+			: [base] "m"  (MaskReg.dword)
+			: "cc", "memory", "ecx", "edx"
+		);
 
-			moduleSize[chip] = moduleSize[chip] + chipSize;
+		moduleSize[chip] = moduleSize[chip] + chipSize;
+
+		if (sec == 1) {
+			has_secondary = 1;
+		}
 
 		printf( "CHA[%u] MASK[%u:%u] @ 0x%08x[0x%08x] ChipSize[%u]\n",
 			cha, chip, sec, addr[1], MaskReg.dword, chipSize );
-		} else {
+	      } else {
 		printf( "CHA[%u] MASK[%u:%u] @ 0x%08x[0x%08x]\n",
 			cha, chip, sec, addr[1], MaskReg.dword );
-		}
+	      }
 	    }
 	}
 	for (chip = 0; chip < 4; chip++) {
-		if (shared_mask) {
+		if (shared_mask || has_secondary) {
 			DIMM_Size = DIMM_Size + moduleSize[chip];
 		} else {
 			DIMM_Size = KMAX(moduleSize[chip], DIMM_Size);
