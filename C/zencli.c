@@ -29,6 +29,9 @@
 #include <sys/types.h>
 #include <time.h>
 
+#define KMAX(M, m)	((M) > (m) ? (M) : (m))
+#define KMIN(m, M)	((m) < (M) ? (m) : (M))
+
 typedef struct
 {
 	unsigned int
@@ -713,12 +716,16 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 	}
 	printf("%u ", cha);
     }
-	printf("\n\t\tfor %u detected channels\n\n", ChannelCount);
+	printf("\n\t\tfor %u detected channels %s a shared mask\n\n",
+		ChannelCount, shared_mask ? "with" : "without");
 
     for (cha = 0; cha < MAX_CHANNELS; cha++)
       if (SDP[cha])
       {
 	unsigned long long DIMM_Size = 0;
+	/* Aggregate primary/secondary decoders per chip, then combine chips
+	 * as sum(shared mask) or max(non-shared mask). */
+	unsigned long long moduleSize[4] = {0, 0, 0, 0};
 
 	const unsigned int CHIP_BAR[2][2] = {
 	[0] =	{
@@ -730,7 +737,7 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 		[1] = UMC_BAR[cha] + CHIP_OFFSET[1][1]
 		}
 	};
-	unsigned short ranks = 0;
+	unsigned short DPC[2] = {0, 0};
 	for (chip = 0; chip < 4; chip++)
 	{
 	    for (sec = 0; sec < 2; sec++)
@@ -751,11 +758,12 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 		SMU_Read(&ChipReg, addr[0]);
 
 		CS = BITVAL(ChipReg.dword, 0);
-		ranks = ranks + CS;
 
-		printf("CHA[%u] CHIP[%u:%u] @ 0x%08x[0x%08x] %sable, %u Rank(s)\n",
+		DPC[chip >> 1] = DPC[chip >> 1] + CS;
+
+		printf("CHA[%u] CHIP[%u:%u] @ 0x%08x[0x%08x] %sable, %u DPC\n",
 			cha, chip, sec, addr[0], ChipReg.dword,
-			CS ? "En":"Dis", ranks);
+			CS ? "En":"Dis", DPC[chip >> 1]);
 
 		if (CS)
 		{
@@ -781,7 +789,7 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 				: "cc", "memory", "ecx", "edx"
 			);
 
-			DIMM_Size += chipSize;
+			moduleSize[chip] = moduleSize[chip] + chipSize;
 
 		printf( "CHA[%u] MASK[%u:%u] @ 0x%08x[0x%08x] ChipSize[%u]\n",
 			cha, chip, sec, addr[1], MaskReg.dword, chipSize );
@@ -790,6 +798,13 @@ void UMC_Read_Exec(	const unsigned int CHIP_OFFSET[2][2],
 			cha, chip, sec, addr[1], MaskReg.dword );
 		}
 	    }
+	}
+	for (chip = 0; chip < 4; chip++) {
+		if (shared_mask) {
+			DIMM_Size = DIMM_Size + moduleSize[chip];
+		} else {
+			DIMM_Size = KMAX(moduleSize[chip], DIMM_Size);
+		}
 	}
 	printf( "\nDIMM Size[%llu KB] [%llu MB]\n\n",
 		DIMM_Size, (DIMM_Size >> 10) );
